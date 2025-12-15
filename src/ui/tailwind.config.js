@@ -5,10 +5,7 @@ const uiDir = resolve(import.meta.dirname)
 /** @type {import('tailwindcss').Config} */
 export default {
   darkMode: 'class',
-  content: [
-    resolve(uiDir, 'index.html'),
-    resolve(uiDir, '**/*.{js,ts,jsx,tsx}'),
-  ],
+  content: [resolve(uiDir, 'index.html'), resolve(uiDir, '**/*.{js,ts,jsx,tsx}')],
   theme: {
     container: {
       center: true,
