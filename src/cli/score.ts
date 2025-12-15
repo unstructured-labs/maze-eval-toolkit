@@ -3,8 +3,8 @@
  */
 
 import { existsSync, readdirSync } from 'node:fs'
-import { confirm, input, select } from '@inquirer/prompts'
 import { ExitPromptError } from '@inquirer/core'
+import { confirm, input, select } from '@inquirer/prompts'
 import chalk from 'chalk'
 import { Command } from 'commander'
 import type { Difficulty, EvaluationResult } from '../core/types'

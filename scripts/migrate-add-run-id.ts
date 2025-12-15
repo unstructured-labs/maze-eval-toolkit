@@ -13,8 +13,8 @@ console.log('Opening database...')
 const db = new Database(DB_PATH)
 
 // Check if run_id column already exists
-const tableInfo = db.query("PRAGMA table_info(evaluations)").all() as Array<{ name: string }>
-const hasRunId = tableInfo.some(col => col.name === 'run_id')
+const tableInfo = db.query('PRAGMA table_info(evaluations)').all() as Array<{ name: string }>
+const hasRunId = tableInfo.some((col) => col.name === 'run_id')
 
 if (hasRunId) {
   console.log('run_id column already exists. Skipping migration.')
@@ -44,7 +44,9 @@ console.log('Creating index...')
 db.run('CREATE INDEX IF NOT EXISTS idx_evaluations_run ON evaluations(run_id)')
 
 // Verify migration
-const nullCount = db.query('SELECT COUNT(*) as count FROM evaluations WHERE run_id IS NULL').get() as { count: number }
+const nullCount = db
+  .query('SELECT COUNT(*) as count FROM evaluations WHERE run_id IS NULL')
+  .get() as { count: number }
 if (nullCount.count > 0) {
   console.error(`ERROR: ${nullCount.count} rows still have NULL run_id`)
   process.exit(1)

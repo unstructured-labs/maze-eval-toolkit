@@ -4,8 +4,8 @@
 
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { checkbox, confirm, input } from '@inquirer/prompts'
 import { ExitPromptError } from '@inquirer/core'
+import { checkbox, confirm, input } from '@inquirer/prompts'
 import chalk from 'chalk'
 import { Command } from 'commander'
 import { v4 as uuidv4 } from 'uuid'
