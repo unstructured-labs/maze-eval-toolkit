@@ -10,6 +10,7 @@
  * - delete: Delete evaluation runs from database
  * - retry: Retry failed evaluations from a previous run
  * - prompt-demo: Generate a prompt for inspection
+ * - ui: Start the UI development server
  */
 
 import { program } from 'commander'
@@ -20,6 +21,7 @@ import { generateCommand } from './generate'
 import { promptDemoCommand } from './prompt-demo'
 import { retryCommand } from './retry'
 import { scoreCommand } from './score'
+import { uiCommand } from './ui'
 
 program.name('lmiq').description('LMIQ v1 Beta - AI Maze Solving Benchmark').version('0.1.0')
 
@@ -30,5 +32,6 @@ program.addCommand(exportCommand)
 program.addCommand(deleteCommand)
 program.addCommand(retryCommand)
 program.addCommand(promptDemoCommand)
+program.addCommand(uiCommand)
 
 program.parse()

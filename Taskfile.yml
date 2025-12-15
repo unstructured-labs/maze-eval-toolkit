@@ -42,10 +42,9 @@ tasks:
       - bun --env-file=.env run src/cli/index.ts retry {{.CLI_ARGS}}
 
   ui:
-    desc: Start the UI viewer
-    dir: src/ui
+    desc: Start the UI viewer with API server
     cmds:
-      - bunx vite
+      - bun run src/server/index.ts & bunx --bun vite --config src/ui/vite.config.ts
 
   format:
     desc: Format code with Biome

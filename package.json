@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "cli": "bun run src/cli/index.ts",
+    "server": "bun run src/server/index.ts",
+    "vite": "bunx --bun vite --config src/ui/vite.config.ts",
+    "ui": "bun run server & bun run vite",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
@@ -27,6 +30,7 @@
     "commander": "^12.1.0",
     "drizzle-kit": "^0.31.8",
     "drizzle-orm": "^0.45.1",
+    "hono": "^4.11.1",
     "lucide-react": "^0.561.0",
     "openai": "^4.77.0",
     "p-limit": "^6.1.0",

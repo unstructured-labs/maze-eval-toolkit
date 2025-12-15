@@ -1,19 +1,57 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { Difficulty, EvaluationResult, TestSetFile } from '../core/types'
 import { DIFFICULTIES } from '../core/types'
+import HumanEval from './components/HumanEval'
+import HumanEvalSetup from './components/HumanEvalSetup'
 import MazeViewer from './components/MazeViewer'
 import ModelSummary from './components/ModelSummary'
 import Navigation from './components/Navigation'
 import SolutionReplay from './components/SolutionReplay'
-import { Button } from './components/ui'
+import {
+  Button,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './components/ui'
+
+type AppMode = 'viewer' | 'human-eval-setup' | 'human-eval'
 
 export default function App() {
+  // App mode
+  const [mode, setMode] = useState<AppMode>('viewer')
+
+  // Human eval state
+  const [humanEvalRunName, setHumanEvalRunName] = useState('')
+  const [humanEvalTestSet, setHumanEvalTestSet] = useState<TestSetFile | null>(null)
+
+  // Viewer state
   const [testSet, setTestSet] = useState<TestSetFile | null>(null)
   const [results, setResults] = useState<EvaluationResult[]>([])
   const [currentDifficulty, setCurrentDifficulty] = useState<Difficulty>('simple')
   const [currentIndex, setCurrentIndex] = useState(0)
   const [selectedResult, setSelectedResult] = useState<EvaluationResult | null>(null)
   const [isReplaying, setIsReplaying] = useState(false)
+
+  // File lists from API
+  const [dataFiles, setDataFiles] = useState<string[]>([])
+  const [resultsFiles, setResultsFiles] = useState<string[]>([])
+  const [selectedDataFile, setSelectedDataFile] = useState<string>('')
+  const [selectedResultsFile, setSelectedResultsFile] = useState<string>('')
+
+  // Fetch file lists on mount
+  useEffect(() => {
+    fetch('/api/data')
+      .then((r) => r.json())
+      .then((d: { files: string[] }) => setDataFiles(d.files))
+      .catch(() => setDataFiles([]))
+
+    fetch('/api/results')
+      .then((r) => r.json())
+      .then((d: { files: string[] }) => setResultsFiles(d.files))
+      .catch(() => setResultsFiles([]))
+  }, [])
 
   // Get current maze
   const mazes = testSet?.mazes[currentDifficulty] ?? []
@@ -23,35 +61,33 @@ export default function App() {
   // Get results for current maze
   const mazeResults = results.filter((r) => r.mazeId === currentMaze?.id)
 
-  // Handle test set file upload
-  const handleTestSetUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
+  // Handle test set file selection
+  const handleDataFileSelect = useCallback(async (filename: string) => {
+    setSelectedDataFile(filename)
     try {
-      const text = await file.text()
-      const data = JSON.parse(text) as TestSetFile
+      const response = await fetch(`/api/data/${filename}`)
+      if (!response.ok) throw new Error('Failed to fetch')
+      const data = (await response.json()) as TestSetFile
       setTestSet(data)
       setCurrentDifficulty('simple')
       setCurrentIndex(0)
       setSelectedResult(null)
     } catch (err) {
-      alert(`Failed to parse test set: ${err}`)
+      alert(`Failed to load test set: ${err}`)
     }
   }, [])
 
-  // Handle results file upload (JSON export from SQLite)
-  const handleResultsUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
+  // Handle results file selection
+  const handleResultsFileSelect = useCallback(async (filename: string) => {
+    setSelectedResultsFile(filename)
     try {
-      const text = await file.text()
-      const data = JSON.parse(text) as EvaluationResult[]
+      const response = await fetch(`/api/results/${filename}`)
+      if (!response.ok) throw new Error('Failed to fetch')
+      const data = (await response.json()) as EvaluationResult[]
       setResults(data)
       setSelectedResult(null)
     } catch (err) {
-      alert(`Failed to parse results: ${err}`)
+      alert(`Failed to load results: ${err}`)
     }
   }, [])
 
@@ -69,42 +105,100 @@ export default function App() {
     setIsReplaying(false)
   }, [])
 
+  // Human eval handlers
+  const handleStartHumanEval = useCallback((runName: string, evalTestSet: TestSetFile) => {
+    setHumanEvalRunName(runName)
+    setHumanEvalTestSet(evalTestSet)
+    setMode('human-eval')
+  }, [])
+
+  const handleHumanEvalComplete = useCallback(() => {
+    setMode('viewer')
+    setHumanEvalRunName('')
+    setHumanEvalTestSet(null)
+  }, [])
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* Header */}
       <header className="bg-card border-b border-border px-6 py-4">
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold">LMIQ v1 Beta - Maze Viewer</h1>
-          <div className="flex gap-4">
-            <Button asChild>
-              <label className="cursor-pointer">
-                Load Test Set
-                <input
-                  type="file"
-                  accept=".json"
-                  onChange={handleTestSetUpload}
-                  className="hidden"
-                />
-              </label>
-            </Button>
-            <Button asChild variant="secondary">
-              <label className="cursor-pointer">
-                Load Results
-                <input
-                  type="file"
-                  accept=".json"
-                  onChange={handleResultsUpload}
-                  className="hidden"
-                />
-              </label>
-            </Button>
-          </div>
+          <h1 className="text-xl font-bold">
+            LMIQ v1 Beta{' '}
+            {mode === 'human-eval'
+              ? '- Human Eval'
+              : mode === 'human-eval-setup'
+                ? '- Setup'
+                : '- Maze Viewer'}
+          </h1>
+          {mode === 'viewer' && (
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Test Set:</span>
+                <Select value={selectedDataFile} onValueChange={handleDataFileSelect}>
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder="Select test set..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {dataFiles.length === 0 ? (
+                      <SelectItem value="_none" disabled>
+                        No files found
+                      </SelectItem>
+                    ) : (
+                      dataFiles.map((file) => (
+                        <SelectItem key={file} value={file}>
+                          {file}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Results:</span>
+                <Select value={selectedResultsFile} onValueChange={handleResultsFileSelect}>
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder="Select results..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {resultsFiles.length === 0 ? (
+                      <SelectItem value="_none" disabled>
+                        No files found
+                      </SelectItem>
+                    ) : (
+                      resultsFiles.map((file) => (
+                        <SelectItem key={file} value={file}>
+                          {file}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button onClick={() => setMode('human-eval-setup')}>Human Eval</Button>
+            </div>
+          )}
         </div>
       </header>
 
       {/* Main Content */}
       <main className="p-6">
-        {!testSet ? (
+        {/* Human Eval Setup */}
+        {mode === 'human-eval-setup' && (
+          <HumanEvalSetup onStart={handleStartHumanEval} onCancel={() => setMode('viewer')} />
+        )}
+
+        {/* Human Eval */}
+        {mode === 'human-eval' && humanEvalTestSet && (
+          <HumanEval
+            runName={humanEvalRunName}
+            testSet={humanEvalTestSet}
+            onComplete={handleHumanEvalComplete}
+          />
+        )}
+
+        {/* Viewer Mode */}
+        {mode === 'viewer' && !testSet ? (
           <div className="text-center py-20">
             <p className="text-muted-foreground text-lg">
               Load a test set JSON file to get started
@@ -113,7 +207,7 @@ export default function App() {
               Generate one with: <code className="bg-card px-2 py-1 rounded">task generate</code>
             </p>
           </div>
-        ) : (
+        ) : mode === 'viewer' && testSet ? (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Left Panel - Maze View */}
             <div className="lg:col-span-2 space-y-4">
@@ -201,7 +295,7 @@ export default function App() {
               )}
             </div>
           </div>
-        )}
+        ) : null}
       </main>
     </div>
   )
