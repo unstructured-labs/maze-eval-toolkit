@@ -4,7 +4,7 @@
 
 import { existsSync, readdirSync } from 'node:fs'
 import { ExitPromptError } from '@inquirer/core'
-import { confirm, input, select } from '@inquirer/prompts'
+import { select } from '@inquirer/prompts'
 import chalk from 'chalk'
 import { Command } from 'commander'
 import type { Difficulty, EvaluationResult } from '../core/types'
@@ -28,7 +28,16 @@ const LLM_GPU_WATTS = 350
 interface ScoreOptions {
   databasePath: string
   model?: string
+  runId?: string
   testSetId?: string
+}
+
+interface RunInfo {
+  runId: string
+  count: number
+  startedAt: string
+  successes: number
+  promptFormats: string[]
 }
 
 interface DifficultyScores {
@@ -52,6 +61,7 @@ interface OverallScores {
   energyEfficiency: number
   totalInferenceTimeMs: number
   totalCost: number
+  promptFormats: string[]
   byDifficulty: Record<Difficulty, DifficultyScores>
 }
 
@@ -96,14 +106,42 @@ function getAllEvaluations(dbPath: string): EvaluationResult[] {
  * Get unique models in the database
  */
 function getUniqueModels(evaluations: EvaluationResult[]): string[] {
-  return [...new Set(evaluations.map((e) => e.model))]
+  return [...new Set(evaluations.map((e) => e.model))].sort()
 }
 
 /**
- * Get unique test set IDs in the database
+ * Get runs for a specific model
  */
-function getUniqueTestSets(evaluations: EvaluationResult[]): string[] {
-  return [...new Set(evaluations.map((e) => e.testSetId))]
+function getRunsForModel(evaluations: EvaluationResult[], model: string): RunInfo[] {
+  const modelEvals = evaluations.filter((e) => e.model === model)
+  const runIds = [...new Set(modelEvals.map((e) => e.runId))]
+
+  return runIds
+    .map((runId) => {
+      const runEvals = modelEvals.filter((e) => e.runId === runId)
+      const successes = runEvals.filter((e) => e.outcome === 'success').length
+      const startedAt = runEvals.reduce(
+        (min, e) => (e.startedAt < min ? e.startedAt : min),
+        runEvals[0]!.startedAt,
+      )
+      // Collect unique prompt formats for this run
+      const formats = new Set<string>()
+      for (const e of runEvals) {
+        if (e.promptFormats) {
+          for (const f of e.promptFormats) {
+            formats.add(f)
+          }
+        }
+      }
+      return {
+        runId,
+        count: runEvals.length,
+        startedAt,
+        successes,
+        promptFormats: [...formats],
+      }
+    })
+    .sort((a, b) => b.startedAt.localeCompare(a.startedAt)) // Most recent first
 }
 
 /**
@@ -227,6 +265,17 @@ function computeScores(evaluations: EvaluationResult[]): OverallScores {
   const totalInferenceTimeMs = evaluations.reduce((a, e) => a + e.inferenceTimeMs, 0)
   const totalCost = evaluations.reduce((a, e) => a + (e.costUsd ?? 0), 0)
 
+  // Collect unique prompt formats used
+  const allFormats = new Set<string>()
+  for (const e of evaluations) {
+    if (e.promptFormats) {
+      for (const f of e.promptFormats) {
+        allFormats.add(f)
+      }
+    }
+  }
+  const promptFormats = [...allFormats]
+
   return {
     total,
     successes: successes.length,
@@ -237,6 +286,7 @@ function computeScores(evaluations: EvaluationResult[]): OverallScores {
     energyEfficiency,
     totalInferenceTimeMs,
     totalCost,
+    promptFormats,
     byDifficulty,
   }
 }
@@ -274,7 +324,10 @@ function printScoreCard(modelName: string, scores: OverallScores): void {
     DIFFICULTIES.reduce((a, d) => a + HUMAN_REFERENCE[d].accuracy, 0) / DIFFICULTIES.length
 
   console.log()
-  console.log(chalk.bold(`LMIQ Score Card - ${modelName}`))
+  console.log(
+    chalk.bold(`LMIQ Score Card - ${modelName}`) +
+      chalk.dim(` (maze formats: ${scores.promptFormats.join(', ')})`),
+  )
   console.log(chalk.dim('─'.repeat(55)))
   console.log()
 
@@ -303,10 +356,25 @@ function printScoreCard(modelName: string, scores: OverallScores): void {
     `LMIQ Score            ${lmiqColor(pct(scores.avgLmiq).padEnd(12))} ${pct(humanLmiq)}`,
   )
 
-  // Energy Efficiency
-  const energyStr = scores.energyEfficiency.toFixed(2)
+  // Energy Efficiency (as percentage for consistency)
   const energyColor = scores.energyEfficiency >= 1.0 ? chalk.green : chalk.yellow
-  console.log(`Energy Efficiency     ${energyColor(energyStr.padEnd(12))} 1.00`)
+  console.log(
+    `Energy Efficiency     ${energyColor(pct(scores.energyEfficiency).padEnd(12))} 100.0%`,
+  )
+
+  // Time and Cost
+  const aiTimeSeconds = scores.totalInferenceTimeMs / 1000
+  let humanTotalTimeSeconds = 0
+  for (const difficulty of DIFFICULTIES) {
+    const ds = scores.byDifficulty[difficulty]
+    if (ds.total > 0) {
+      humanTotalTimeSeconds += HUMAN_REFERENCE[difficulty].timeSeconds * ds.total
+    }
+  }
+  console.log(
+    `Time                  ${`${aiTimeSeconds.toFixed(0)}s`.padEnd(12)} ~${humanTotalTimeSeconds.toFixed(0)}s`,
+  )
+  console.log(`Cost                  ${`$${scores.totalCost.toFixed(2)}`.padEnd(12)} $0`)
 
   console.log()
   console.log(chalk.bold('By Difficulty:'))
@@ -332,10 +400,91 @@ function printScoreCard(modelName: string, scores: OverallScores): void {
 
   console.log()
   console.log(chalk.dim('─'.repeat(55)))
-  console.log(
-    `Total Evaluations: ${scores.total} | Cost: $${scores.totalCost.toFixed(4)} | Time: ${(scores.totalInferenceTimeMs / 1000).toFixed(1)}s`,
-  )
+  console.log(`Total Evaluations: ${scores.total}`)
   console.log()
+}
+
+/**
+ * Print summary scores for all models and all runs
+ */
+function printAllModelsSummary(evaluations: EvaluationResult[]): void {
+  const models = getUniqueModels(evaluations)
+  const humanLmiq = computeHumanLmiq()
+  const avgHumanAccuracy =
+    DIFFICULTIES.reduce((a, d) => a + HUMAN_REFERENCE[d].accuracy, 0) / DIFFICULTIES.length
+
+  console.log()
+  console.log(chalk.bold('LMIQ Score Summary - Human Baseline'))
+  console.log(chalk.dim('─'.repeat(55)))
+  console.log()
+
+  // Header reference
+  console.log(`Overall Accuracy      ${pct(avgHumanAccuracy)}`)
+  console.log(`Adjusted Accuracy     ${pct(avgHumanAccuracy)}`)
+  console.log('Time Efficiency       100.0%')
+  console.log(`LMIQ Score            ${pct(humanLmiq)}`)
+  console.log('Energy Efficiency     100.0%')
+  console.log('Time                  ~Xs per task')
+  console.log('Cost                  $0')
+  console.log()
+
+  for (const model of models) {
+    // Get all runs for this model
+    const runs = getRunsForModel(evaluations, model)
+    if (runs.length === 0) continue
+
+    console.log(chalk.bold(`${model}`))
+    console.log(chalk.dim('─'.repeat(55)))
+
+    // Show each run
+    for (const run of runs) {
+      const runEvals = evaluations.filter((e) => e.runId === run.runId)
+      const scores = computeScores(runEvals)
+
+      // Calculate times
+      const aiTimeSeconds = scores.totalInferenceTimeMs / 1000
+      let humanTotalTimeSeconds = 0
+      for (const difficulty of DIFFICULTIES) {
+        const ds = scores.byDifficulty[difficulty]
+        if (ds.total > 0) {
+          humanTotalTimeSeconds += HUMAN_REFERENCE[difficulty].timeSeconds * ds.total
+        }
+      }
+
+      const date = new Date(run.startedAt).toLocaleString()
+      console.log(chalk.dim(`Run: ${date} | formats: ${scores.promptFormats.join(', ')}`))
+      console.log()
+
+      const accColor = scores.accuracy >= avgHumanAccuracy ? chalk.green : chalk.yellow
+      console.log(
+        `Overall Accuracy      ${accColor(pct(scores.accuracy).padEnd(12))} ${pct(avgHumanAccuracy)}`,
+      )
+      console.log(
+        `Adjusted Accuracy     ${chalk.cyan(pct(scores.adjustedAccuracy).padEnd(12))} ${pct(avgHumanAccuracy)}`,
+      )
+
+      const timeColor = scores.avgTimeEfficiency >= 0.5 ? chalk.green : chalk.yellow
+      console.log(
+        `Time Efficiency       ${timeColor(pct(scores.avgTimeEfficiency).padEnd(12))} 100.0%`,
+      )
+
+      const lmiqColor = scores.avgLmiq >= humanLmiq * 0.8 ? chalk.green : chalk.yellow
+      console.log(
+        `LMIQ Score            ${lmiqColor(pct(scores.avgLmiq).padEnd(12))} ${pct(humanLmiq)}`,
+      )
+
+      const energyColor = scores.energyEfficiency >= 1.0 ? chalk.green : chalk.yellow
+      console.log(
+        `Energy Efficiency     ${energyColor(pct(scores.energyEfficiency).padEnd(12))} 100.0%`,
+      )
+
+      console.log(
+        `Time                  ${`${aiTimeSeconds.toFixed(0)}s`.padEnd(12)} ~${humanTotalTimeSeconds.toFixed(0)}s`,
+      )
+      console.log(`Cost                  ${`$${scores.totalCost.toFixed(2)}`.padEnd(12)} $0`)
+      console.log()
+    }
+  }
 }
 
 function findDatabases(): string[] {
@@ -353,43 +502,35 @@ async function promptForOptions(): Promise<ScoreOptions> {
 
   // Find available databases
   const databases = findDatabases()
-  let databasePath: string
-
-  if (databases.length > 0) {
-    const choices = [
-      ...databases.map((d) => ({ name: d, value: d })),
-      { name: 'Other (enter path)', value: '__custom__' },
-    ]
-    const selected = await select({
-      message: 'Select evaluation database:',
-      choices,
-      pageSize: choices.length,
-    })
-    if (selected === '__custom__') {
-      databasePath = await input({
-        message: 'Database path:',
-        validate: (value) => (existsSync(value) ? true : 'File not found'),
-      })
-    } else {
-      databasePath = selected
-    }
-  } else {
-    databasePath = await input({
-      message: 'Database path:',
-      default: './results/eval.db',
-      validate: (value) => (existsSync(value) ? true : 'File not found'),
-    })
+  if (databases.length === 0) {
+    console.error(chalk.red('No databases found in ./results/'))
+    console.error('Run `task evaluate` to create one')
+    process.exit(1)
   }
+
+  const databasePath = await select({
+    message: 'Select evaluation database:',
+    choices: databases.map((d) => ({ name: d, value: d })),
+    pageSize: databases.length,
+  })
 
   // Load evaluations to get available models
   const evaluations = getAllEvaluations(databasePath)
   const models = getUniqueModels(evaluations)
-  const testSets = getUniqueTestSets(evaluations)
 
+  if (models.length === 0) {
+    console.error(chalk.red('No evaluations found in database'))
+    process.exit(1)
+  }
+
+  // Select model
   let model: string | undefined
-  if (models.length > 1) {
+  if (models.length === 1) {
+    model = models[0]!
+    console.log(chalk.dim(`Using model: ${model}`))
+  } else {
     const modelChoices = [
-      { name: 'All models', value: '__all__' },
+      { name: chalk.bold('Summarize All Models'), value: '__all__' },
       ...models.map((m) => ({ name: m, value: m })),
     ]
     const selectedModel = await select({
@@ -398,49 +539,46 @@ async function promptForOptions(): Promise<ScoreOptions> {
       pageSize: modelChoices.length,
     })
     model = selectedModel === '__all__' ? undefined : selectedModel
-  } else if (models.length === 1) {
-    model = models[0]
-    console.log(chalk.dim(`Using model: ${model}`))
   }
 
-  let testSetId: string | undefined
-  if (testSets.length > 1) {
-    const testSetChoices = [
-      { name: 'All test sets', value: '__all__' },
-      ...testSets.map((t) => ({ name: `${t.slice(0, 8)}...`, value: t })),
-    ]
-    const selectedTestSet = await select({
-      message: 'Select test set:',
-      choices: testSetChoices,
-      pageSize: testSetChoices.length,
+  // If summarizing all, skip run selection
+  if (!model) {
+    return { databasePath, model: undefined, runId: undefined }
+  }
+
+  // Select run for this model
+  let runId: string | undefined
+  const runs = getRunsForModel(evaluations, model)
+
+  if (runs.length === 1) {
+    runId = runs[0]!.runId
+    console.log(chalk.dim(`Using run: ${runId}`))
+  } else {
+    const runChoices = runs.map((r) => {
+      const date = new Date(r.startedAt).toLocaleString()
+      const successRate = ((r.successes / r.count) * 100).toFixed(0)
+      const formatsStr = r.promptFormats.length > 0 ? r.promptFormats.join(', ') : 'unknown'
+      return {
+        name: `${date} - ${r.count} evals, ${successRate}% success, formats: ${formatsStr}\n  ${chalk.dim(r.runId)}`,
+        value: r.runId,
+      }
     })
-    testSetId = selectedTestSet === '__all__' ? undefined : selectedTestSet
+
+    runId = await select({
+      message: 'Select evaluation run:',
+      choices: runChoices,
+      pageSize: Math.min(runChoices.length * 2, 20),
+    })
   }
 
-  console.log()
-  const confirmed = await confirm({
-    message: 'Calculate scores?',
-    default: true,
-  })
-
-  if (!confirmed) {
-    console.log(chalk.yellow('Cancelled'))
-    process.exit(0)
-  }
-
-  return { databasePath, model, testSetId }
+  return { databasePath, model, runId }
 }
 
 async function runScoring(options: ScoreOptions): Promise<void> {
-  const { databasePath, model, testSetId } = options
+  const { databasePath, model, runId, testSetId } = options
 
   // Load all evaluations
   let evaluations = getAllEvaluations(databasePath)
-
-  // Filter by model if specified
-  if (model) {
-    evaluations = evaluations.filter((e) => e.model === model)
-  }
 
   // Filter by test set if specified
   if (testSetId) {
@@ -452,20 +590,34 @@ async function runScoring(options: ScoreOptions): Promise<void> {
     return
   }
 
-  // Group by model and compute scores
-  const models = getUniqueModels(evaluations)
-
-  for (const m of models) {
-    const modelEvals = evaluations.filter((e) => e.model === m)
-    const scores = computeScores(modelEvals)
-    printScoreCard(m, scores)
+  // If no model specified, show summary for all models
+  if (!model) {
+    printAllModelsSummary(evaluations)
+    return
   }
+
+  // Filter by model
+  evaluations = evaluations.filter((e) => e.model === model)
+
+  // Filter by run ID if specified
+  if (runId) {
+    evaluations = evaluations.filter((e) => e.runId === runId)
+  }
+
+  if (evaluations.length === 0) {
+    console.log(chalk.red('No evaluations found matching criteria'))
+    return
+  }
+
+  const scores = computeScores(evaluations)
+  printScoreCard(model, scores)
 }
 
 export const scoreCommand = new Command('score')
   .description('Compute LMIQ scores from evaluation results')
   .option('-d, --database <path>', 'Evaluation database path')
   .option('-m, --model <model>', 'Filter by model')
+  .option('-r, --run-id <id>', 'Filter by run ID')
   .option('-t, --test-set <id>', 'Filter by test set ID')
   .option('-i, --interactive', 'Run in interactive mode (default if no options provided)')
   .action(async (options) => {
@@ -490,6 +642,7 @@ export const scoreCommand = new Command('score')
     // Non-interactive mode
     const databasePath = options.database as string
     const model = options.model as string | undefined
+    const runId = options.runId as string | undefined
     const testSetId = options.testSet as string | undefined
 
     if (!existsSync(databasePath)) {
@@ -497,5 +650,5 @@ export const scoreCommand = new Command('score')
       process.exit(1)
     }
 
-    await runScoring({ databasePath, model, testSetId })
+    await runScoring({ databasePath, model, runId, testSetId })
   })

@@ -71,6 +71,63 @@ export function renderASCII(maze: GeneratedMaze): string {
 }
 
 /**
+ * Render maze as block format with thick walls
+ * Uses spaced symbols: # = wall, . = open path, S = start, G = goal
+ */
+export function renderBlock(maze: GeneratedMaze): string {
+  const { grid, start, goal } = maze
+  const height = grid.length
+  const width = grid[0]?.length ?? 0
+
+  // Block maze dimensions: (2*width+1) x (2*height+1)
+  const blockHeight = 2 * height + 1
+  const blockWidth = 2 * width + 1
+
+  // Initialize all as walls
+  const blocks: string[][] = []
+  for (let by = 0; by < blockHeight; by++) {
+    blocks.push(new Array(blockWidth).fill('#'))
+  }
+
+  // Carve out cells and passages
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const cell = grid[y]![x]!
+
+      // Cell position in block coordinates
+      const bx = 2 * x + 1
+      const by = 2 * y + 1
+
+      // Carve the cell itself
+      blocks[by]![bx] = '.'
+
+      // Mark start and goal
+      if (start.x === x && start.y === y) {
+        blocks[by]![bx] = 'S'
+      } else if (goal.x === x && goal.y === y) {
+        blocks[by]![bx] = 'G'
+      }
+
+      // Carve passages (remove walls between cells)
+      if (!cell.walls.right && x < width - 1) {
+        blocks[by]![bx + 1] = '.'
+      }
+      if (!cell.walls.bottom && y < height - 1) {
+        blocks[by + 1]![bx] = '.'
+      }
+    }
+  }
+
+  // Convert to spaced string format
+  const lines: string[] = []
+  for (let by = 0; by < blockHeight; by++) {
+    lines.push(blocks[by]!.join(' '))
+  }
+
+  return lines.join('\n')
+}
+
+/**
  * Render maze as adjacency list (graph format)
  */
 export function renderAdjacency(maze: GeneratedMaze): string {
@@ -111,6 +168,64 @@ export function renderAdjacency(maze: GeneratedMaze): string {
 
       const neighborStr = neighbors.length > 0 ? neighbors.join(', ') : '(none)'
       lines.push(`(${x},${y})${marker} -> ${neighborStr}`)
+    }
+  }
+
+  return lines.join('\n')
+}
+
+/**
+ * Render maze as explicit graph edges with action labels
+ * Tests pure graph traversal without spatial reasoning
+ */
+export function renderEdges(maze: GeneratedMaze): string {
+  const { grid, start, goal } = maze
+  const height = grid.length
+  const width = grid[0]?.length ?? 0
+  const lines: string[] = []
+
+  lines.push('Explicit Graph Edges (each node shows available actions and destinations):')
+  lines.push('')
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const cell = grid[y]![x]!
+      const edges: string[] = []
+
+      // Check each direction with explicit action names
+      if (!cell.walls.top && y > 0) {
+        edges.push(`go UP to reach (${x},${y - 1})`)
+      }
+      if (!cell.walls.bottom && y < height - 1) {
+        edges.push(`go DOWN to reach (${x},${y + 1})`)
+      }
+      if (!cell.walls.left && x > 0) {
+        edges.push(`go LEFT to reach (${x - 1},${y})`)
+      }
+      if (!cell.walls.right && x < width - 1) {
+        edges.push(`go RIGHT to reach (${x + 1},${y})`)
+      }
+
+      // Mark special positions
+      let marker = ''
+      if (start.x === x && start.y === y) {
+        marker = ' [START]'
+      } else if (goal.x === x && goal.y === y) {
+        marker = ' [GOAL]'
+      }
+
+      // Format as natural language
+      let edgesStr: string
+      if (edges.length === 0) {
+        edgesStr = 'No moves available.'
+      } else if (edges.length === 1) {
+        edgesStr = `You can ${edges[0]}.`
+      } else {
+        const lastEdge = edges.pop()!
+        edgesStr = `You can ${edges.join(', ')} OR ${lastEdge}.`
+      }
+
+      lines.push(`From Node (${x},${y})${marker}: ${edgesStr}`)
     }
   }
 
@@ -235,7 +350,9 @@ export function renderMatrix2D(maze: GeneratedMaze): string {
  */
 export const RENDERERS: Record<PromptFormat, MazeRenderer> = {
   ascii: { name: 'ascii', render: renderASCII },
+  block: { name: 'block', render: renderBlock },
   adjacency: { name: 'adjacency', render: renderAdjacency },
+  edges: { name: 'edges', render: renderEdges },
   coordmatrix: { name: 'coordmatrix', render: renderCoordMatrix },
   matrix2d: { name: 'matrix2d', render: renderMatrix2D },
 }
@@ -289,7 +406,9 @@ export function generatePrompt(maze: GeneratedMaze, formats: PromptFormat[]): st
 export function generateAllPrompts(maze: GeneratedMaze): Record<PromptFormat, string> {
   return {
     ascii: generatePrompt(maze, ['ascii']),
+    block: generatePrompt(maze, ['block']),
     adjacency: generatePrompt(maze, ['adjacency']),
+    edges: generatePrompt(maze, ['edges']),
     coordmatrix: generatePrompt(maze, ['coordmatrix']),
     matrix2d: generatePrompt(maze, ['matrix2d']),
   }

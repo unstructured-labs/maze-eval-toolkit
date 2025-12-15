@@ -41,9 +41,10 @@ const COMMON_MODELS = [
   { name: 'GPT-4o', value: 'openai/gpt-4o' },
   { name: 'Claude Opus 4.5', value: 'anthropic/claude-opus-4.5' },
   { name: 'Claude Haiku 4.5', value: 'anthropic/claude-haiku-4.5' },
+  { name: 'Claude 3.5 Sonnet', value: 'anthropic/claude-3.5-sonnet' },
   { name: 'Grok 4.1 Fast', value: 'x-ai/grok-4.1-fast' },
   { name: 'Kimi K2 Thinking', value: 'moonshotai/kimi-k2-thinking' },
-  { name: 'DeepSeek R1 0528', value: 'deepseek/deepseek-r1-0528' },
+  { name: 'Deepseek 3.2', value: 'deepseek/deepseek-v3.2' },
 ]
 
 function findTestSets(): string[] {
@@ -72,33 +73,17 @@ async function promptForOptions(): Promise<EvaluateOptions> {
 
   // Find available test sets
   const testSets = findTestSets()
-  let testSetPath: string
-
-  if (testSets.length > 0) {
-    const choices = [
-      ...testSets.map((t) => ({ name: t, value: t })),
-      { name: 'Other (enter path)', value: '__custom__' },
-    ]
-    const selected = await select({
-      message: 'Select test set:',
-      choices,
-      pageSize: choices.length,
-    })
-    if (selected === '__custom__') {
-      testSetPath = await input({
-        message: 'Test set path:',
-        validate: (value) => (existsSync(value) ? true : 'File not found'),
-      })
-    } else {
-      testSetPath = selected
-    }
-  } else {
-    testSetPath = await input({
-      message: 'Test set path:',
-      default: './data/test-set.json',
-      validate: (value) => (existsSync(value) ? true : 'File not found'),
-    })
+  if (testSets.length === 0) {
+    console.error(chalk.red('No test sets found in ./data/'))
+    console.error('Run `task generate` to create one')
+    process.exit(1)
   }
+
+  const testSetPath = await select({
+    message: 'Select test set:',
+    choices: testSets.map((t) => ({ name: t, value: t })),
+    pageSize: testSets.length,
+  })
 
   // Model selection
   const modelChoice = await select({
@@ -140,13 +125,6 @@ async function promptForOptions(): Promise<EvaluateOptions> {
   })
   const concurrency = Number.parseInt(concurrencyStr, 10)
 
-  // Limit
-  const limitStr = await input({
-    message: 'Limit mazes (leave empty for all):',
-    default: '',
-  })
-  const limit = limitStr ? Number.parseInt(limitStr, 10) : null
-
   // Output path
   const outputPath = await input({
     message: 'Output database path:',
@@ -164,7 +142,6 @@ async function promptForOptions(): Promise<EvaluateOptions> {
   console.log(`  Model: ${model}`)
   console.log(`  Formats: ${formats.join(', ')}`)
   console.log(`  Concurrency: ${concurrency}`)
-  if (limit) console.log(`  Limit: ${limit} mazes`)
   console.log(`  Output: ${outputPath}`)
   console.log()
 
@@ -184,7 +161,7 @@ async function promptForOptions(): Promise<EvaluateOptions> {
     formats,
     concurrency,
     outputPath,
-    limit,
+    limit: null,
     apiKey,
   }
 }
@@ -246,16 +223,16 @@ async function runEvaluation(options: EvaluateOptions) {
   let successes = 0
   let failures = 0
   let parseErrors = 0
+  let emptyResponses = 0
+  let tokenLimits = 0
   let totalCost = 0
   const startTime = Date.now()
 
   // Evaluate each maze
+  const total = evaluationList.length
+  const totalStr = String(total)
   const evaluationPromises = evaluationList.map(({ maze, difficulty }) =>
     limit(async () => {
-      const mazeNum = completed + 1
-      const totalStr = String(evaluationList.length)
-      const prefix = `[${String(mazeNum).padStart(totalStr.length)}/${totalStr}]`
-
       // Generate prompt with selected formats
       const prompt = generatePrompt(maze, formats)
 
@@ -271,7 +248,17 @@ async function runEvaluation(options: EvaluateOptions) {
         let outcome: EvaluationOutcome
         let validation = null
 
-        if (response.parseError || !response.parsedMoves) {
+        if (!response.rawResponse || response.rawResponse.trim() === '') {
+          // Model returned empty content
+          if (response.finishReason === 'length') {
+            // Hit token limit while reasoning
+            outcome = 'token_limit'
+            tokenLimits++
+          } else {
+            outcome = 'empty_response'
+            emptyResponses++
+          }
+        } else if (response.parseError || !response.parsedMoves) {
           outcome = 'parse_error'
           parseErrors++
         } else {
@@ -327,16 +314,29 @@ async function runEvaluation(options: EvaluateOptions) {
           totalCost += response.stats.costUsd
         }
 
+        // Insert into database and increment counter
+        insertEvaluation(db, result)
+        completed++
+
         // Log result
+        const prefix = `[${String(completed).padStart(totalStr.length)}/${totalStr}]`
         const outcomeColor =
-          outcome === 'success' ? chalk.green : outcome === 'parse_error' ? chalk.yellow : chalk.red
-        const timeStr = `${response.stats.inferenceTimeMs}ms`.padStart(9)
+          outcome === 'success'
+            ? chalk.green
+            : outcome === 'parse_error' || outcome === 'empty_response' || outcome === 'token_limit'
+              ? chalk.yellow
+              : chalk.red
+        const timeStr = `${(response.stats.inferenceTimeMs / 1000).toFixed(1)}s`.padStart(7)
         const costStr =
           response.stats.costUsd !== null ? `$${response.stats.costUsd.toFixed(4)}` : '-'
         const tokensStr = `${response.stats.outputTokens ?? '-'} tokens`.padStart(12)
-        const stepsStr = response.parsedMoves ? `${response.parsedMoves.length} steps` : '-'
+        const stepsStr = response.parsedMoves
+          ? `${response.parsedMoves.length} steps (shortest = ${maze.shortestPath})`
+          : '-'
         console.log(
-          `${prefix} ${difficulty.padEnd(10)} ${timeStr}  ${costStr.padStart(8)}  ${tokensStr}  ${outcomeColor(outcome.padEnd(12))} ${stepsStr}`,
+          `${prefix} ${difficulty.padEnd(10)} ${timeStr}  ${costStr.padStart(
+            8,
+          )}  ${tokensStr}  ${outcomeColor(outcome.padEnd(12))} ${stepsStr}`,
         )
       } catch (err) {
         // API error
@@ -370,15 +370,22 @@ async function runEvaluation(options: EvaluateOptions) {
         })
 
         failures++
-        const errTimeStr = `${Date.now() - new Date(startedAt).getTime()}ms`.padStart(9)
+
+        // Insert into database and increment counter
+        insertEvaluation(db, result)
+        completed++
+
+        // Log error
+        const prefix = `[${String(completed).padStart(totalStr.length)}/${totalStr}]`
+        const errTimeStr = `${((Date.now() - new Date(startedAt).getTime()) / 1000).toFixed(
+          1,
+        )}s`.padStart(7)
         console.log(
-          `${prefix} ${difficulty.padEnd(10)} ${errTimeStr}  ${'-'.padStart(8)}  ${'-'.padStart(12)}  ${chalk.red('error'.padEnd(12))} ${errorMsg}`,
+          `${prefix} ${difficulty.padEnd(10)} ${errTimeStr}  ${'-'.padStart(
+            8,
+          )}  ${'-'.padStart(12)}  ${chalk.red('error'.padEnd(12))} ${errorMsg}`,
         )
       }
-
-      // Insert into database
-      insertEvaluation(db, result)
-      completed++
 
       return result
     }),
@@ -395,12 +402,17 @@ async function runEvaluation(options: EvaluateOptions) {
   console.log()
   console.log(chalk.dim('─'.repeat(50)))
   console.log(chalk.bold('Summary'))
+  console.log(`Model: ${chalk.cyan(model)}`)
+  console.log(`Maze Formats: ${chalk.dim(formats.join(', '))}`)
+  console.log()
   console.log(`Total: ${completed}`)
   console.log(
     `Successes: ${chalk.green(successes)} (${((successes / completed) * 100).toFixed(1)}%)`,
   )
   console.log(`Failures: ${chalk.red(failures)}`)
   console.log(`Parse Errors: ${chalk.yellow(parseErrors)}`)
+  console.log(`Empty Responses: ${chalk.yellow(emptyResponses)}`)
+  console.log(`Token Limits: ${chalk.yellow(tokenLimits)}`)
   console.log(`Total Time: ${(totalTime / 1000).toFixed(1)}s`)
   console.log(`Total Cost: ${chalk.cyan(`$${totalCost.toFixed(4)}`)}`)
   console.log()

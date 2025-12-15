@@ -25,6 +25,7 @@ export interface EvaluationResponse {
   parsedMoves: MoveAction[] | null
   reasoning: string | null
   parseError?: string
+  finishReason: string | null // 'stop' = natural, 'length' = hit token limit
   stats: ResponseStats
 }
 
@@ -79,36 +80,65 @@ export async function evaluateMaze(
 ): Promise<EvaluationResponse> {
   const startTime = Date.now()
 
-  const completion = await client.chat.completions.create({
-    model,
-    messages: [
-      {
-        role: 'user',
-        content: prompt,
-      },
-    ],
-    temperature: 0.7,
-    // @ts-expect-error OpenRouter-specific fields
-    usage: { include: true },
-    reasoning: {},
-  })
+  let completion: Record<string, unknown>
+  try {
+    completion = (await client.chat.completions.create({
+      model,
+      messages: [
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
+      temperature: 0.7,
+      // @ts-expect-error OpenRouter-specific fields
+      usage: { include: true },
+      reasoning: {},
+    })) as unknown as Record<string, unknown>
+  } catch (sdkError) {
+    // SDK-level error (network, timeout, etc.)
+    const errMsg = sdkError instanceof Error ? sdkError.message : String(sdkError)
+    throw new Error(`API request failed: ${errMsg}`)
+  }
 
   const inferenceTimeMs = Date.now() - startTime
 
-  const content = completion.choices[0]?.message?.content ?? ''
+  // Check for null/undefined response
+  if (!completion) {
+    throw new Error('Invalid API response: null or undefined response received')
+  }
+
+  // Check for OpenRouter error response
+  if (completion.error) {
+    const errorObj = completion.error as Record<string, unknown>
+    const errorMsg = (errorObj.message as string) || JSON.stringify(completion.error)
+    throw new Error(`OpenRouter API error: ${errorMsg}`)
+  }
+
+  // Validate response structure
+  const choices = completion.choices as Array<Record<string, unknown>> | undefined
+  if (!choices || choices.length === 0) {
+    throw new Error(
+      `Invalid API response: no choices returned. Response: ${JSON.stringify(completion).slice(0, 500)}`,
+    )
+  }
+
+  const choice = choices[0]
+  const message = choice?.message as Record<string, unknown> | undefined
+  const content = (message?.content as string) ?? ''
+  const finishReason = (choice?.finish_reason as string) ?? null
 
   // Extract reasoning from OpenRouter response
-  // @ts-expect-error OpenRouter-specific reasoning field
-  const reasoning = (completion.choices[0]?.message?.reasoning as string) ?? null
+  const reasoning = (message?.reasoning as string) ?? null
 
   // Parse the response
   const parsed = parseResponse(content)
 
   // Extract stats
-  const usage = completion.usage
+  const usage = completion.usage as Record<string, unknown> | undefined
   const stats: ResponseStats = {
-    inputTokens: usage?.prompt_tokens ?? null,
-    outputTokens: usage?.completion_tokens ?? null,
+    inputTokens: (usage?.prompt_tokens as number) ?? null,
+    outputTokens: (usage?.completion_tokens as number) ?? null,
     reasoningTokens: extractReasoningTokens(usage),
     costUsd: extractCost(usage),
     inferenceTimeMs,
@@ -119,6 +149,7 @@ export async function evaluateMaze(
     parsedMoves: parsed.moves,
     reasoning,
     parseError: parsed.error,
+    finishReason,
     stats,
   }
 }

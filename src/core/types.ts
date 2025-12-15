@@ -82,12 +82,19 @@ export interface MazeWithPrompts extends GeneratedMaze {
 /**
  * Available prompt formats
  */
-export type PromptFormat = 'ascii' | 'adjacency' | 'coordmatrix' | 'matrix2d'
+export type PromptFormat = 'ascii' | 'block' | 'adjacency' | 'edges' | 'coordmatrix' | 'matrix2d'
 
 /**
  * All available prompt formats
  */
-export const PROMPT_FORMATS: PromptFormat[] = ['ascii', 'adjacency', 'coordmatrix', 'matrix2d']
+export const PROMPT_FORMATS: PromptFormat[] = [
+  'ascii',
+  'block',
+  'adjacency',
+  'edges',
+  'coordmatrix',
+  'matrix2d',
+]
 
 /**
  * Result of validating a solution
@@ -131,7 +138,14 @@ export interface TestSetFile {
 /**
  * Outcome of an evaluation
  */
-export type EvaluationOutcome = 'success' | 'failure' | 'parse_error' | 'invalid_move' | 'timeout'
+export type EvaluationOutcome =
+  | 'success'
+  | 'failure'
+  | 'parse_error'
+  | 'invalid_move'
+  | 'timeout'
+  | 'empty_response'
+  | 'token_limit'
 
 /**
  * A single evaluation result

@@ -21,6 +21,21 @@ tasks:
     cmds:
       - bun run src/cli/index.ts score {{.CLI_ARGS}}
 
+  prompt-demo:
+    desc: Generate a prompt for inspection
+    cmds:
+      - bun run src/cli/index.ts prompt-demo {{.CLI_ARGS}}
+
+  export:
+    desc: Export evaluation results to JSON for the UI
+    cmds:
+      - bun run src/cli/index.ts export {{.CLI_ARGS}}
+
+  delete:
+    desc: Delete evaluation runs from the database
+    cmds:
+      - bun run src/cli/index.ts delete {{.CLI_ARGS}}
+
   ui:
     desc: Start the UI viewer
     dir: src/ui
@@ -47,3 +62,14 @@ tasks:
     desc: Run TypeScript type checking
     cmds:
       - bunx tsc --noEmit
+
+  studio:
+    desc: Open Drizzle Studio to inspect the database
+    cmds:
+      - bunx drizzle-kit studio
+
+  backup:
+    desc: Backup the evaluation database
+    cmds:
+      - cp results/eval.db "results/eval-$(date +%Y%m%d-%H%M%S).db"
+      - echo "Backup created"
