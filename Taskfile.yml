@@ -1,0 +1,49 @@
+version: '3'
+
+tasks:
+  install:
+    desc: Install dependencies
+    cmds:
+      - bun install
+
+  generate:
+    desc: Generate a test set of mazes
+    cmds:
+      - bun run src/cli/index.ts generate {{.CLI_ARGS}}
+
+  evaluate:
+    desc: Run model evaluation on a test set
+    cmds:
+      - bun --env-file=.env run src/cli/index.ts evaluate {{.CLI_ARGS}}
+
+  score:
+    desc: Compute LMIQ scores from evaluation results
+    cmds:
+      - bun run src/cli/index.ts score {{.CLI_ARGS}}
+
+  ui:
+    desc: Start the UI viewer
+    dir: src/ui
+    cmds:
+      - bunx vite
+
+  format:
+    desc: Format code with Biome
+    cmds:
+      - bunx biome format --write .
+
+  lint:
+    desc: Lint code with Biome
+    cmds:
+      - bunx biome lint .
+
+  check:
+    desc: Run all checks (format + lint + typecheck)
+    cmds:
+      - bunx biome check .
+      - bunx tsc --noEmit
+
+  tsc:
+    desc: Run TypeScript type checking
+    cmds:
+      - bunx tsc --noEmit
