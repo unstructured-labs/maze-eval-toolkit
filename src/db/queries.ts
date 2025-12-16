@@ -50,6 +50,7 @@ export function insertEvaluation(db: Database, result: EvaluationResult): void {
     result.solutionLength,
     result.shortestPath,
     result.efficiency,
+    result.isHuman ? 1 : 0,
   )
 }
 
@@ -81,6 +82,7 @@ interface EvaluationRow {
   solution_length: number | null
   shortest_path: number
   efficiency: number | null
+  is_human: number
 }
 
 /**
@@ -112,6 +114,7 @@ function rowToResult(row: EvaluationRow): EvaluationResult {
     solutionLength: row.solution_length,
     shortestPath: row.shortest_path,
     efficiency: row.efficiency,
+    isHuman: row.is_human === 1,
   }
 }
 
@@ -179,11 +182,14 @@ export function getModelSummary(db: Database, testSetId: string): ModelSummary[]
 }
 
 /**
- * Create a new evaluation result object
+ * Create a new evaluation result object (defaults to non-human/model evaluation)
  */
-export function createEvaluationResult(partial: Omit<EvaluationResult, 'id'>): EvaluationResult {
+export function createEvaluationResult(
+  partial: Omit<EvaluationResult, 'id' | 'isHuman'> & { isHuman?: boolean },
+): EvaluationResult {
   return {
     id: uuidv4(),
+    isHuman: false,
     ...partial,
   }
 }

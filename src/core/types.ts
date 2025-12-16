@@ -188,6 +188,9 @@ export interface EvaluationResult {
   solutionLength: number | null
   shortestPath: number
   efficiency: number | null
+
+  // Human evaluation flag
+  isHuman: boolean
 }
 
 /**

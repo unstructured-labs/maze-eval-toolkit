@@ -42,7 +42,10 @@ CREATE TABLE IF NOT EXISTS evaluations (
   -- Efficiency
   solution_length INTEGER,
   shortest_path INTEGER NOT NULL,
-  efficiency REAL
+  efficiency REAL,
+
+  -- Human evaluation flag
+  is_human INTEGER NOT NULL DEFAULT 0
 );
 `
 
@@ -56,6 +59,7 @@ CREATE INDEX IF NOT EXISTS idx_evaluations_maze ON evaluations(maze_id);
 CREATE INDEX IF NOT EXISTS idx_evaluations_outcome ON evaluations(outcome);
 CREATE INDEX IF NOT EXISTS idx_evaluations_test_set ON evaluations(test_set_id);
 CREATE INDEX IF NOT EXISTS idx_evaluations_difficulty ON evaluations(difficulty);
+CREATE INDEX IF NOT EXISTS idx_evaluations_is_human ON evaluations(is_human);
 `
 
 /**
@@ -69,7 +73,8 @@ INSERT INTO evaluations (
   cost_usd, inference_time_ms,
   raw_response, parsed_moves, reasoning,
   outcome, moves_executed, final_position,
-  solution_length, shortest_path, efficiency
+  solution_length, shortest_path, efficiency,
+  is_human
 ) VALUES (
   ?, ?, ?, ?, ?, ?,
   ?, ?, ?, ?,
@@ -77,7 +82,8 @@ INSERT INTO evaluations (
   ?, ?,
   ?, ?, ?,
   ?, ?, ?,
-  ?, ?, ?
+  ?, ?, ?,
+  ?
 )
 `
 

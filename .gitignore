@@ -10,6 +10,9 @@ dist/
 data/
 results/
 
+# Input data
+input/
+
 # Environment
 .env
 .env.local

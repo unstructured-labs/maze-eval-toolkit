@@ -133,6 +133,7 @@ app.post('/api/human-evals', async (c) => {
         solutionLength: result.pathLength,
         shortestPath: result.shortestPath,
         efficiency: result.efficiency,
+        isHuman: true,
       }
 
       insertEvaluation(db, evaluation)

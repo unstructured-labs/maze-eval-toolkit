@@ -49,6 +49,7 @@ function getAllEvaluations(dbPath: string): EvaluationResult[] {
     solutionLength: row.solution_length,
     shortestPath: row.shortest_path,
     efficiency: row.efficiency,
+    isHuman: row.is_human === 1,
   }))
 }
 

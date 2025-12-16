@@ -56,6 +56,7 @@ export default function InteractiveMaze({
 
   // Goal state
   const [hasReachedGoal, setHasReachedGoal] = useState(false)
+  const [goalReachedTimeMs, setGoalReachedTimeMs] = useState<number | null>(null)
 
   // Calculate canvas size
   const canvasWidth = maze.width * CELL_SIZE + WALL_WIDTH
@@ -69,6 +70,7 @@ export default function InteractiveMaze({
     setStartTime(startImmediately ? Date.now() : null)
     setElapsedMs(0)
     setHasReachedGoal(false)
+    setGoalReachedTimeMs(null)
   }, [maze, startImmediately])
 
   // Timer effect
@@ -137,9 +139,13 @@ export default function InteractiveMaze({
       // Check if reached goal
       if (newPos.x === maze.goal.x && newPos.y === maze.goal.y) {
         setHasReachedGoal(true)
+        // Capture time immediately when goal is reached, not when ENTER is pressed
+        if (startTime) {
+          setGoalReachedTimeMs(Date.now() - startTime)
+        }
       }
     },
-    [playerPos, canMove, hasReachedGoal, isObfuscated, maze.goal],
+    [playerPos, canMove, hasReachedGoal, isObfuscated, maze.goal, startTime],
   )
 
   // Keyboard event handler
@@ -156,7 +162,6 @@ export default function InteractiveMaze({
       // Enter to complete (after reaching goal)
       if (e.code === 'Enter' && hasReachedGoal) {
         e.preventDefault()
-        const finalTimeMs = startTime ? Date.now() - startTime : 0
         const pathLength = moves.length
         const efficiency = pathLength > 0 ? maze.shortestPath / pathLength : 0
 
@@ -164,7 +169,7 @@ export default function InteractiveMaze({
           mazeId: maze.id,
           difficulty: maze.difficulty,
           moves,
-          timeMs: finalTimeMs,
+          timeMs: goalReachedTimeMs ?? 0,
           pathLength,
           shortestPath: maze.shortestPath,
           efficiency,
@@ -197,7 +202,16 @@ export default function InteractiveMaze({
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isObfuscated, hasReachedGoal, movePlayer, onReveal, onComplete, moves, startTime, maze])
+  }, [
+    isObfuscated,
+    hasReachedGoal,
+    movePlayer,
+    onReveal,
+    onComplete,
+    moves,
+    goalReachedTimeMs,
+    maze,
+  ])
 
   // Focus container for keyboard events
   useEffect(() => {

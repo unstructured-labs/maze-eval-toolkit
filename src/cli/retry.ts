@@ -149,6 +149,7 @@ function getEvaluationsToRetry(
     solutionLength: row.solution_length as number | null,
     shortestPath: row.shortest_path as number,
     efficiency: row.efficiency as number | null,
+    isHuman: (row.is_human as number) === 1,
   }))
 
   closeDatabase()

@@ -99,6 +99,7 @@ function getAllEvaluations(dbPath: string): EvaluationResult[] {
     solutionLength: row.solution_length,
     shortestPath: row.shortest_path,
     efficiency: row.efficiency,
+    isHuman: row.is_human === 1,
   }))
 }
 
@@ -405,6 +406,113 @@ function printScoreCard(modelName: string, scores: OverallScores): void {
 }
 
 /**
+ * Print human evaluation score card
+ * Shows metrics that make sense for human performance
+ */
+function printHumanScoreCard(runName: string, evaluations: EvaluationResult[]): void {
+  const total = evaluations.length
+  const successes = evaluations.filter((e) => e.outcome === 'success')
+  const accuracy = total > 0 ? successes.length / total : 0
+
+  // Path efficiency for successes
+  const pathEfficiencies = successes.map((e) => e.efficiency).filter((e): e is number => e !== null)
+  const avgPathEfficiency =
+    pathEfficiencies.length > 0
+      ? pathEfficiencies.reduce((a, b) => a + b, 0) / pathEfficiencies.length
+      : 0
+
+  // LMIQ = accuracy × path_efficiency (humans are the time baseline, so time_efficiency = 1.0)
+  const avgLmiq = accuracy * avgPathEfficiency
+
+  // Total time spent (sum of all inference times which are human solve times)
+  const totalTimeMs = evaluations.reduce((a, e) => a + e.inferenceTimeMs, 0)
+  const totalTimeSeconds = totalTimeMs / 1000
+
+  // Energy usage: human brain at 20W
+  const energyJoules = totalTimeSeconds * HUMAN_BRAIN_WATTS
+  const energyWh = energyJoules / 3600
+
+  // By difficulty breakdown
+  const byDifficulty: Record<
+    Difficulty,
+    { total: number; avgPathEfficiency: number; avgTimeSeconds: number }
+  > = {} as any
+
+  for (const difficulty of DIFFICULTIES) {
+    const diffEvals = evaluations.filter((e) => e.difficulty === difficulty)
+    if (diffEvals.length === 0) {
+      byDifficulty[difficulty] = { total: 0, avgPathEfficiency: 0, avgTimeSeconds: 0 }
+      continue
+    }
+
+    const diffEfficiencies = diffEvals
+      .map((e) => e.efficiency)
+      .filter((e): e is number => e !== null)
+    const diffAvgEfficiency =
+      diffEfficiencies.length > 0
+        ? diffEfficiencies.reduce((a, b) => a + b, 0) / diffEfficiencies.length
+        : 0
+
+    const diffTotalTimeMs = diffEvals.reduce((a, e) => a + e.inferenceTimeMs, 0)
+    const diffAvgTimeSeconds = diffTotalTimeMs / 1000 / diffEvals.length
+
+    byDifficulty[difficulty] = {
+      total: diffEvals.length,
+      avgPathEfficiency: diffAvgEfficiency,
+      avgTimeSeconds: diffAvgTimeSeconds,
+    }
+  }
+
+  console.log()
+  console.log(chalk.bold.magenta(`Human Evaluation - ${runName}`))
+  console.log(chalk.dim('─'.repeat(55)))
+  console.log()
+
+  // Core metrics
+  console.log(`Accuracy              ${chalk.green(pct(accuracy))}`)
+  console.log(`Path Efficiency       ${chalk.cyan(pct(avgPathEfficiency))}`)
+  console.log(`LMIQ Score            ${chalk.yellow(pct(avgLmiq))}`)
+  console.log()
+
+  // Time and energy
+  const minutes = Math.floor(totalTimeSeconds / 60)
+  const seconds = Math.floor(totalTimeSeconds % 60)
+  const timeStr = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`
+  console.log(`Total Time            ${chalk.cyan(timeStr)}`)
+  console.log(
+    `Energy Usage          ${chalk.dim(`${energyJoules.toFixed(0)}J (${energyWh.toFixed(2)} Wh @ 20W brain)`)}`,
+  )
+
+  console.log()
+  console.log(chalk.bold('By Difficulty:'))
+  console.log(chalk.dim('               Count    Path Eff    Avg Time'))
+
+  for (const difficulty of DIFFICULTIES) {
+    const ds = byDifficulty[difficulty]
+    if (ds.total === 0) continue
+
+    const countStr = String(ds.total).padEnd(8)
+    const effStr = pct(ds.avgPathEfficiency).padEnd(11)
+    const timeStr = `${ds.avgTimeSeconds.toFixed(1)}s`
+
+    // Color based on efficiency
+    const effColor =
+      ds.avgPathEfficiency >= 0.9
+        ? chalk.green
+        : ds.avgPathEfficiency >= 0.7
+          ? chalk.yellow
+          : chalk.red
+
+    console.log(`  ${difficulty.padEnd(12)} ${countStr} ${effColor(effStr)} ${timeStr}`)
+  }
+
+  console.log()
+  console.log(chalk.dim('─'.repeat(55)))
+  console.log(`Total Mazes: ${total}`)
+  console.log()
+}
+
+/**
  * Print summary scores for all models and all runs
  */
 function printAllModelsSummary(evaluations: EvaluationResult[]): void {
@@ -433,6 +541,21 @@ function printAllModelsSummary(evaluations: EvaluationResult[]): void {
     const runs = getRunsForModel(evaluations, model)
     if (runs.length === 0) continue
 
+    // Check if this is a human evaluation (use isHuman flag or model prefix as fallback)
+    const modelEvals = evaluations.filter((e) => e.model === model)
+    const isHumanEval = modelEvals[0]?.isHuman === true || model.startsWith('human/')
+
+    if (isHumanEval) {
+      // Print human-specific summary for each run
+      for (const run of runs) {
+        const runEvals = evaluations.filter((e) => e.runId === run.runId)
+        const runName = model.startsWith('human/') ? model.slice(6) : model
+        printHumanScoreCard(runName, runEvals)
+      }
+      continue
+    }
+
+    // Model evaluation - use standard scoring
     console.log(chalk.bold(`${model}`))
     console.log(chalk.dim('─'.repeat(55)))
 
@@ -609,8 +732,17 @@ async function runScoring(options: ScoreOptions): Promise<void> {
     return
   }
 
-  const scores = computeScores(evaluations)
-  printScoreCard(model, scores)
+  // Check if this is a human evaluation (use isHuman flag or model prefix as fallback)
+  const isHumanEval = evaluations[0]?.isHuman === true || model.startsWith('human/')
+
+  if (isHumanEval) {
+    // Extract run name from model (format: "human/{runName}")
+    const runName = model.startsWith('human/') ? model.slice(6) : model
+    printHumanScoreCard(runName, evaluations)
+  } else {
+    const scores = computeScores(evaluations)
+    printScoreCard(model, scores)
+  }
 }
 
 export const scoreCommand = new Command('score')
