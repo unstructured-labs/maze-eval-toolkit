@@ -12,6 +12,7 @@ import { closeDatabase, initDatabase } from '../db/client'
 interface RunSummary {
   runId: string
   model: string
+  format: string
   count: number
   outcomes: Record<string, number>
   startedAt: string
@@ -33,6 +34,7 @@ function getRunSummaries(dbPath: string): RunSummary[] {
     SELECT
       run_id,
       model,
+      prompt_formats,
       COUNT(*) as count,
       MIN(started_at) as started_at
     FROM evaluations
@@ -42,6 +44,7 @@ function getRunSummaries(dbPath: string): RunSummary[] {
   const rows = query.all() as Array<{
     run_id: string
     model: string
+    prompt_formats: string
     count: number
     started_at: string
   }>
@@ -65,9 +68,19 @@ function getRunSummaries(dbPath: string): RunSummary[] {
       outcomes[o.outcome] = o.count
     }
 
+    // Parse prompt_formats JSON to get the format
+    let format = 'unknown'
+    try {
+      const formats = JSON.parse(row.prompt_formats) as string[]
+      format = formats[0] || 'unknown'
+    } catch {
+      // Ignore parse errors
+    }
+
     summaries.push({
       runId: row.run_id,
       model: row.model,
+      format,
       count: row.count,
       outcomes,
       startedAt: row.started_at,
@@ -136,8 +149,8 @@ async function run() {
 
   const choices = summaries.map((s) => {
     const date = new Date(s.startedAt).toLocaleString()
-    const label = `${s.model} - ${s.count} evals - ${date}`
-    const detail = `  ${chalk.dim(s.runId)} | ${formatOutcomes(s.outcomes)}`
+    const label = `${s.model} - ${s.count} evals - ${date} - ${s.format}`
+    const detail = `   ${chalk.dim(s.runId)} | ${formatOutcomes(s.outcomes)}`
     return {
       name: `${label}\n${detail}`,
       value: s.runId,

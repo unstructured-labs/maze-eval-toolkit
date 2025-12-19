@@ -157,7 +157,7 @@ app.post('/api/human-evals', async (c) => {
   }
 })
 
-const PORT = 3001
+const PORT = 3017
 console.log(`API server running at http://localhost:${PORT}`)
 
 export default {

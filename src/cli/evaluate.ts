@@ -23,6 +23,7 @@ import { DIFFICULTIES, PROMPT_FORMATS } from '../core/types'
 import { closeDatabase, initDatabase } from '../db/client'
 import { createEvaluationResult, insertEvaluation } from '../db/queries'
 import { createClient, evaluateMaze } from '../llm/openrouter'
+import { formatDuration } from './utils'
 
 interface EvaluateOptions {
   testSetPath: string
@@ -250,6 +251,7 @@ async function runEvaluation(options: EvaluateOptions) {
   let tokenLimits = 0
   let apiErrors = 0
   let constraintViolations = 0
+  let noPathFound = 0
   let totalCost = 0
   const startTime = Date.now()
 
@@ -283,9 +285,18 @@ async function runEvaluation(options: EvaluateOptions) {
             outcome = 'empty_response'
             emptyResponses++
           }
-        } else if (response.parseError || !response.parsedMoves) {
+        } else if (response.parseError || response.parsedMoves === null) {
           outcome = 'parse_error'
           parseErrors++
+          // Log parse error details to debug file
+          appendFileSync(
+            logPath,
+            `\n--- PARSE ERROR DEBUG (maze: ${maze.id}) ---\nError: ${response.parseError ?? 'No parsed moves'}\nRaw response:\n${response.rawResponse}\n--- END PARSE ERROR DEBUG ---\n\n`,
+          )
+        } else if (response.parsedMoves.length === 0) {
+          // Model returned empty array - believes no path exists
+          outcome = 'no_path_found'
+          noPathFound++
         } else {
           // Validate the solution with constraint checking
           validation = validateSolutionWithConstraints(
@@ -364,7 +375,8 @@ async function runEvaluation(options: EvaluateOptions) {
             : outcome === 'parse_error' ||
                 outcome === 'empty_response' ||
                 outcome === 'token_limit' ||
-                outcome === 'constraint_violated'
+                outcome === 'constraint_violated' ||
+                outcome === 'no_path_found'
               ? chalk.yellow
               : chalk.red
         const timeStr = `${(response.stats.inferenceTimeMs / 1000).toFixed(1)}s`.padStart(7)
@@ -450,11 +462,12 @@ async function runEvaluation(options: EvaluateOptions) {
   log(`Successes: ${chalk.green(successes)} (${((successes / completed) * 100).toFixed(1)}%)`)
   log(`Failures: ${chalk.red(failures)}`)
   log(`Constraint Violations: ${chalk.yellow(constraintViolations)}`)
+  log(`No Path Found: ${chalk.yellow(noPathFound)}`)
   log(`Parse Errors: ${chalk.yellow(parseErrors)}`)
   log(`Empty Responses: ${chalk.yellow(emptyResponses)}`)
   log(`Token Limits: ${chalk.yellow(tokenLimits)}`)
   log(`API Errors: ${chalk.red(apiErrors)}`)
-  log(`Total Time: ${(totalTime / 1000).toFixed(1)}s`)
+  log(`Total Time: ${formatDuration(totalTime / 1000)}`)
   log(`Total Cost: ${chalk.cyan(`$${totalCost.toFixed(4)}`)}`)
   log('')
   log(`Results saved to: ${chalk.cyan(outputPath)}`)

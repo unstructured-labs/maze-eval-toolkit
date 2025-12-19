@@ -17,9 +17,9 @@ export interface ParsedResponse {
 /**
  * Validate and normalize an array of moves
  */
-function validateMoves(parsed: unknown): MoveAction[] | null {
+function validateMoves(parsed: unknown, allowEmpty = false): MoveAction[] | null {
   if (!Array.isArray(parsed)) return null
-  if (parsed.length === 0) return null
+  if (parsed.length === 0) return allowEmpty ? [] : null
 
   const moves: MoveAction[] = []
   for (const move of parsed) {
@@ -48,10 +48,10 @@ function validateMoves(parsed: unknown): MoveAction[] | null {
 /**
  * Try to parse JSON from a string
  */
-function tryParseJson(jsonStr: string): MoveAction[] | null {
+function tryParseJson(jsonStr: string, allowEmpty = true): MoveAction[] | null {
   try {
     const parsed = JSON.parse(jsonStr)
-    return validateMoves(parsed)
+    return validateMoves(parsed, allowEmpty)
   } catch {
     return null
   }
@@ -67,8 +67,8 @@ function tryParseObjectFormat(content: string): ParsedResponse | null {
     try {
       const parsed = JSON.parse(codeBlockMatch[1])
       if (parsed.actions && Array.isArray(parsed.actions)) {
-        const moves = validateMoves(parsed.actions)
-        if (moves) {
+        const moves = validateMoves(parsed.actions, true)
+        if (moves !== null) {
           return { moves, comments: parsed.comments }
         }
       }
@@ -83,8 +83,8 @@ function tryParseObjectFormat(content: string): ParsedResponse | null {
     try {
       const parsed = JSON.parse(objectMatch[0])
       if (parsed.actions && Array.isArray(parsed.actions)) {
-        const moves = validateMoves(parsed.actions)
-        if (moves) {
+        const moves = validateMoves(parsed.actions, true)
+        if (moves !== null) {
           return { moves, comments: parsed.comments }
         }
       }
@@ -108,7 +108,7 @@ export function parseResponse(content: string): ParsedResponse {
   const codeBlockMatch = content.match(/```(?:json)?\s*(\[[\s\S]*?\])\s*```/)
   if (codeBlockMatch?.[1]) {
     const moves = tryParseJson(codeBlockMatch[1])
-    if (moves) return { moves }
+    if (moves !== null) return { moves }
   }
 
   // Strategy 2: Find the LAST JSON array in the response
@@ -119,7 +119,7 @@ export function parseResponse(content: string): ParsedResponse {
       const match = allArrayMatches[i]?.[0]
       if (match) {
         const moves = tryParseJson(match)
-        if (moves) return { moves }
+        if (moves !== null) return { moves }
       }
     }
   }
@@ -128,7 +128,7 @@ export function parseResponse(content: string): ParsedResponse {
   const greedyMatch = content.match(/\[[\s\S]*\]/)
   if (greedyMatch?.[0]) {
     const moves = tryParseJson(greedyMatch[0])
-    if (moves) return { moves }
+    if (moves !== null) return { moves }
   }
 
   // Strategy 4: Look for comma-separated list of actions

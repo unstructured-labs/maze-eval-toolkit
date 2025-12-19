@@ -346,6 +346,58 @@ export function renderMatrix2D(maze: GeneratedMaze): string {
 }
 
 /**
+ * Render maze using the MazeBench Coordinate Token format.
+ * Each cell is represented as: <|row-col|><|wall_token|><|content_token|>
+ *
+ * Wall tokens use combinations of up/down/left/right (e.g., <|up_left_wall|>)
+ * Content tokens: <|blank|>, <|origin|>, <|target|>
+ *
+ * Reference: https://arxiv.org/html/2502.14669v1
+ */
+export function renderCoordinateToken(maze: GeneratedMaze): string {
+  const { grid, start, goal } = maze
+  const height = grid.length
+  const width = grid[0]?.length ?? 0
+  const lines: string[] = []
+
+  for (let row = 0; row < height; row++) {
+    let rowStr = ''
+
+    for (let col = 0; col < width; col++) {
+      const cell = grid[row]![col]!
+
+      // Build coordinate token: <|row-col|>
+      rowStr += `<|${row}-${col}|>`
+
+      // Build wall token from cell walls (top→up, bottom→down)
+      // Order must be consistent: up, down, left, right
+      const walls: string[] = []
+      if (cell.walls.top) walls.push('up')
+      if (cell.walls.bottom) walls.push('down')
+      if (cell.walls.left) walls.push('left')
+      if (cell.walls.right) walls.push('right')
+
+      const wallToken = walls.length === 0 ? 'no_wall' : `${walls.join('_')}_wall`
+      rowStr += `<|${wallToken}|>`
+
+      // Build content token (priority: origin > target > blank)
+      const isStart = col === start.x && row === start.y
+      const isGoal = col === goal.x && row === goal.y
+
+      let contentToken = 'blank'
+      if (isStart) contentToken = 'origin'
+      else if (isGoal) contentToken = 'target'
+
+      rowStr += `<|${contentToken}|>`
+    }
+
+    lines.push(rowStr)
+  }
+
+  return lines.join('\n')
+}
+
+/**
  * All available renderers
  */
 export const RENDERERS: Record<PromptFormat, MazeRenderer> = {
@@ -355,6 +407,7 @@ export const RENDERERS: Record<PromptFormat, MazeRenderer> = {
   edges: { name: 'edges', render: renderEdges },
   coordmatrix: { name: 'coordmatrix', render: renderCoordMatrix },
   matrix2d: { name: 'matrix2d', render: renderMatrix2D },
+  coordtoken: { name: 'coordtoken', render: renderCoordinateToken },
 }
 
 /**
@@ -424,5 +477,6 @@ export function generateAllPrompts(maze: GeneratedMaze): Record<PromptFormat, st
     edges: generatePrompt(maze, ['edges'], specialInstructions),
     coordmatrix: generatePrompt(maze, ['coordmatrix'], specialInstructions),
     matrix2d: generatePrompt(maze, ['matrix2d'], specialInstructions),
+    coordtoken: generatePrompt(maze, ['coordtoken'], specialInstructions),
   }
 }

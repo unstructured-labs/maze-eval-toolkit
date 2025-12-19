@@ -101,7 +101,14 @@ export interface MazeWithPrompts extends GeneratedMaze {
 /**
  * Available prompt formats
  */
-export type PromptFormat = 'ascii' | 'block' | 'adjacency' | 'edges' | 'coordmatrix' | 'matrix2d'
+export type PromptFormat =
+  | 'ascii'
+  | 'block'
+  | 'adjacency'
+  | 'edges'
+  | 'coordmatrix'
+  | 'matrix2d'
+  | 'coordtoken'
 
 /**
  * All available prompt formats
@@ -113,6 +120,7 @@ export const PROMPT_FORMATS: PromptFormat[] = [
   'edges',
   'coordmatrix',
   'matrix2d',
+  'coordtoken',
 ]
 
 /**
@@ -170,6 +178,7 @@ export type EvaluationOutcome =
   | 'token_limit'
   | 'api_error'
   | 'constraint_violated'
+  | 'no_path_found'
 
 /**
  * A single evaluation result

@@ -10,6 +10,7 @@ import { Command } from 'commander'
 import type { Difficulty, EvaluationResult } from '../core/types'
 import { DIFFICULTIES } from '../core/types'
 import { closeDatabase, initDatabase } from '../db/client'
+import { formatDuration } from './utils'
 
 /**
  * Average human reference values for scoring
@@ -348,60 +349,10 @@ function computeScores(evaluations: EvaluationResult[]): OverallScores {
 }
 
 /**
- * Compute average human reference LMIQ score (for comparison)
- */
-function computeHumanLmiq(): number {
-  // Average human: 100% time efficiency (by definition), 100% path efficiency (optimal)
-  // LMIQ = time_efficiency × path_efficiency × accuracy
-  let totalLmiq = 0
-  let count = 0
-  for (const difficulty of DIFFICULTIES) {
-    const humanAcc = HUMAN_REFERENCE[difficulty].accuracy
-    // Human LMIQ = 1.0 (time) × 1.0 (path) × accuracy
-    totalLmiq += humanAcc
-    count++
-  }
-  return totalLmiq / count
-}
-
-/**
- * Compute elite human reference LMIQ score (for comparison)
- */
-function computeEliteHumanLmiq(): number {
-  // Elite human: faster times, higher accuracy, 100% path efficiency (optimal)
-  let totalLmiq = 0
-  let count = 0
-  for (const difficulty of DIFFICULTIES) {
-    const eliteAcc = ELITE_HUMAN_REFERENCE[difficulty].accuracy
-    // Elite Human LMIQ = 1.0 (time) × 1.0 (path) × accuracy
-    totalLmiq += eliteAcc
-    count++
-  }
-  return totalLmiq / count
-}
-
-/**
  * Format percentage
  */
 function pct(value: number): string {
   return `${(value * 100).toFixed(1)}%`
-}
-
-/**
- * Format time in seconds to human-readable format (e.g., "3m 2s", "48s", "1h 5m")
- */
-function formatTime(seconds: number, prefix = ''): string {
-  if (seconds < 60) {
-    return `${prefix}${Math.round(seconds)}s`
-  }
-  if (seconds < 3600) {
-    const mins = Math.floor(seconds / 60)
-    const secs = Math.round(seconds % 60)
-    return secs > 0 ? `${prefix}${mins}m ${secs}s` : `${prefix}${mins}m`
-  }
-  const hours = Math.floor(seconds / 3600)
-  const mins = Math.round((seconds % 3600) / 60)
-  return mins > 0 ? `${prefix}${hours}h ${mins}m` : `${prefix}${hours}h`
 }
 
 /**
@@ -426,16 +377,7 @@ function printScoreCard(modelName: string, scores: OverallScores): void {
 
   // Time and Cost
   const aiTimeSeconds = scores.totalInferenceTimeMs / 1000
-  let humanTotalTimeSeconds = 0
-  let eliteTotalTimeSeconds = 0
-  for (const difficulty of DIFFICULTIES) {
-    const ds = scores.byDifficulty[difficulty]
-    if (ds.total > 0) {
-      humanTotalTimeSeconds += HUMAN_REFERENCE[difficulty].timeSeconds * ds.total
-      eliteTotalTimeSeconds += ELITE_HUMAN_REFERENCE[difficulty].timeSeconds * ds.total
-    }
-  }
-  console.log(`Time                  ${formatTime(aiTimeSeconds)}`)
+  console.log(`Time                  ${formatDuration(aiTimeSeconds)}`)
   console.log(`Cost                  $${scores.totalCost.toFixed(2)}`)
 
   // Comparison table
@@ -563,7 +505,7 @@ function printHumanScoreCard(runName: string, evaluations: EvaluationResult[]): 
   console.log()
 
   // Time and energy
-  console.log(`Total Time            ${chalk.cyan(formatTime(totalTimeSeconds))}`)
+  console.log(`Total Time            ${chalk.cyan(formatDuration(totalTimeSeconds))}`)
   console.log(
     `Energy Usage          ${chalk.dim(`${energyJoules.toFixed(0)}J (${energyWh.toFixed(2)} Wh @ 20W brain)`)}`,
   )
@@ -588,7 +530,7 @@ function printHumanScoreCard(runName: string, evaluations: EvaluationResult[]): 
           : chalk.red
 
     console.log(
-      `  ${difficulty.padEnd(12)} ${countStr} ${effColor(effStr)} ${formatTime(ds.avgTimeSeconds)}`,
+      `  ${difficulty.padEnd(12)} ${countStr} ${effColor(effStr)} ${formatDuration(ds.avgTimeSeconds)}`,
     )
   }
 
@@ -634,11 +576,15 @@ function printAllModelsSummary(evaluations: EvaluationResult[]): void {
     console.log(chalk.bold(`${model}`))
     console.log(chalk.dim('─'.repeat(55)))
 
-    // Show each run
-    for (const run of runs) {
+    // Compute scores for all runs and sort by accuracy (highest first)
+    const runsWithScores = runs.map((run) => {
       const runEvals = evaluations.filter((e) => e.runId === run.runId)
-      const scores = computeScores(runEvals)
+      return { run, scores: computeScores(runEvals) }
+    })
+    runsWithScores.sort((a, b) => b.scores.accuracy - a.scores.accuracy)
 
+    // Show each run
+    for (const { run, scores } of runsWithScores) {
       // Calculate times
       const aiTimeSeconds = scores.totalInferenceTimeMs / 1000
 
@@ -650,7 +596,7 @@ function printAllModelsSummary(evaluations: EvaluationResult[]): void {
       const accColor = scores.accuracy >= avgHumanAccuracy ? chalk.green : chalk.yellow
       console.log(`Accuracy              ${accColor(pct(scores.accuracy))}`)
       console.log(`Adjusted Accuracy     ${chalk.cyan(pct(scores.adjustedAccuracy))}`)
-      console.log(`Time                  ${formatTime(aiTimeSeconds)}`)
+      console.log(`Time                  ${formatDuration(aiTimeSeconds)}`)
       console.log(`Cost                  $${scores.totalCost.toFixed(2)}`)
 
       // Comparison table

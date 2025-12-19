@@ -8,6 +8,8 @@
     "server": "bun run src/server/index.ts",
     "vite": "bunx --bun vite --config src/ui/vite.config.ts",
     "ui": "bun run server & bun run vite",
+    "visualizer": "bunx --bun vite --config src/ui-visualizer/vite.config.ts",
+    "dev:visualizer": "bun run server & bun run visualizer",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
@@ -34,6 +36,7 @@
     "lucide-react": "^0.561.0",
     "openai": "^4.77.0",
     "p-limit": "^6.1.0",
+    "recharts": "^3.6.0",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.4.0",
     "uuid": "^11.0.3"
