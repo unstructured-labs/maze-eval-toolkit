@@ -2,35 +2,16 @@
  * Score calculation utilities for the visualizer
  */
 
+import {
+  ELITE_HUMAN_BASELINE,
+  HUMAN_BASELINE,
+  HUMAN_BRAIN_WATTS,
+  LLM_GPU_WATTS,
+} from '@/core/difficulty'
 import type { Difficulty, EvaluationOutcome, EvaluationResult, PromptFormat } from '@/core/types'
 
-/**
- * Average human reference values for scoring
- */
-export const HUMAN_REFERENCE: Record<Difficulty, { timeSeconds: number; accuracy: number }> = {
-  simple: { timeSeconds: 10, accuracy: 1.0 },
-  easy: { timeSeconds: 20, accuracy: 1.0 },
-  medium: { timeSeconds: 30, accuracy: 0.98 },
-  hard: { timeSeconds: 60, accuracy: 0.96 },
-  nightmare: { timeSeconds: 90, accuracy: 0.93 },
-  horror: { timeSeconds: 150, accuracy: 0.9 },
-}
-
-/**
- * Elite human reference values
- */
-export const ELITE_HUMAN_REFERENCE: Record<Difficulty, { timeSeconds: number; accuracy: number }> =
-  {
-    simple: { timeSeconds: 4, accuracy: 1.0 },
-    easy: { timeSeconds: 8, accuracy: 1.0 },
-    medium: { timeSeconds: 15, accuracy: 0.99 },
-    hard: { timeSeconds: 25, accuracy: 0.98 },
-    nightmare: { timeSeconds: 60, accuracy: 0.96 },
-    horror: { timeSeconds: 100, accuracy: 0.94 },
-  }
-
-const HUMAN_BRAIN_WATTS = 20
-const LLM_GPU_WATTS = 350
+// Re-export for consumers that import from here
+export { ELITE_HUMAN_BASELINE as ELITE_HUMAN_REFERENCE, HUMAN_BASELINE as HUMAN_REFERENCE }
 
 /**
  * Aggregated scores for a single model
@@ -122,8 +103,8 @@ export function computeModelScores(evaluations: EvaluationResult[]): ModelScore 
   let totalHumanTimeMsElite = 0
 
   for (const e of evaluations) {
-    const humanTimeMs = HUMAN_REFERENCE[e.difficulty].timeSeconds * 1000
-    const eliteTimeMs = ELITE_HUMAN_REFERENCE[e.difficulty].timeSeconds * 1000
+    const humanTimeMs = HUMAN_BASELINE[e.difficulty].timeSeconds * 1000
+    const eliteTimeMs = ELITE_HUMAN_BASELINE[e.difficulty].timeSeconds * 1000
     totalHumanTimeMs += humanTimeMs
     totalHumanTimeMsElite += eliteTimeMs
 
@@ -302,7 +283,7 @@ export function computeModelFormatScores(
   format: PromptFormat,
   elite = false,
 ): ModelFormatScore {
-  const reference = elite ? ELITE_HUMAN_REFERENCE : HUMAN_REFERENCE
+  const reference = elite ? ELITE_HUMAN_BASELINE : HUMAN_BASELINE
   const model = evaluations[0]?.model || 'unknown'
   const total = evaluations.length
   const successes = evaluations.filter((e) => e.outcome === 'success')
@@ -446,7 +427,7 @@ export function aggregateByModelAndFormat(
  * Human by definition has 100% time efficiency and path efficiency
  */
 export function computeHumanBaseline(results: EvaluationResult[], elite = false): HumanBaseline {
-  const reference = elite ? ELITE_HUMAN_REFERENCE : HUMAN_REFERENCE
+  const reference = elite ? ELITE_HUMAN_BASELINE : HUMAN_BASELINE
 
   // Weighted average of human accuracy by difficulty distribution in results
   const difficultyCount: Record<Difficulty, number> = {

@@ -7,37 +7,18 @@ import { ExitPromptError } from '@inquirer/core'
 import { checkbox, select } from '@inquirer/prompts'
 import chalk from 'chalk'
 import { Command } from 'commander'
+import {
+  DIFFICULTIES,
+  ELITE_HUMAN_BASELINE,
+  HUMAN_BASELINE,
+  HUMAN_BRAIN_WATTS,
+  LLM_GPU_WATTS,
+} from '../core'
 import type { Difficulty, EvaluationResult } from '../core/types'
-import { DIFFICULTIES } from '../core/types'
 import { closeDatabase, initDatabase } from '../db/client'
 import { formatDuration } from './utils'
 
-/**
- * Average human reference values for scoring
- */
-const HUMAN_REFERENCE: Record<Difficulty, { timeSeconds: number; accuracy: number }> = {
-  simple: { timeSeconds: 10, accuracy: 1.0 },
-  easy: { timeSeconds: 20, accuracy: 1.0 },
-  medium: { timeSeconds: 30, accuracy: 0.98 },
-  hard: { timeSeconds: 60, accuracy: 0.96 },
-  nightmare: { timeSeconds: 90, accuracy: 0.93 },
-  horror: { timeSeconds: 150, accuracy: 0.9 },
-}
-
-/**
- * Elite human reference values (faster times, higher accuracy)
- */
-const ELITE_HUMAN_REFERENCE: Record<Difficulty, { timeSeconds: number; accuracy: number }> = {
-  simple: { timeSeconds: 4, accuracy: 1.0 },
-  easy: { timeSeconds: 8, accuracy: 1.0 },
-  medium: { timeSeconds: 15, accuracy: 0.99 },
-  hard: { timeSeconds: 25, accuracy: 0.98 },
-  nightmare: { timeSeconds: 60, accuracy: 0.96 },
-  horror: { timeSeconds: 100, accuracy: 0.94 },
-}
-
-const HUMAN_BRAIN_WATTS = 20
-const LLM_GPU_WATTS = 350
+// Human baseline constants imported from @/core/difficulty
 
 interface ScoreOptions {
   databasePath: string
@@ -191,8 +172,8 @@ function computeScores(evaluations: EvaluationResult[]): OverallScores {
     }
 
     const successes = diffEvals.filter((e) => e.outcome === 'success')
-    const humanTimeMs = HUMAN_REFERENCE[difficulty].timeSeconds * 1000
-    const eliteTimeMs = ELITE_HUMAN_REFERENCE[difficulty].timeSeconds * 1000
+    const humanTimeMs = HUMAN_BASELINE[difficulty].timeSeconds * 1000
+    const eliteTimeMs = ELITE_HUMAN_BASELINE[difficulty].timeSeconds * 1000
 
     // Path efficiency for successes
     const pathEfficiencies = successes
@@ -275,8 +256,8 @@ function computeScores(evaluations: EvaluationResult[]): OverallScores {
   let timeEfficiencyCount = 0
   for (const e of evaluations) {
     if (e.outcome === 'success') {
-      const humanTimeMs = HUMAN_REFERENCE[e.difficulty].timeSeconds * 1000
-      const eliteTimeMs = ELITE_HUMAN_REFERENCE[e.difficulty].timeSeconds * 1000
+      const humanTimeMs = HUMAN_BASELINE[e.difficulty].timeSeconds * 1000
+      const eliteTimeMs = ELITE_HUMAN_BASELINE[e.difficulty].timeSeconds * 1000
       totalTimeEfficiency += Math.min(humanTimeMs / e.inferenceTimeMs, 1.0)
       totalTimeEfficiencyElite += Math.min(eliteTimeMs / e.inferenceTimeMs, 1.0)
     }
@@ -291,8 +272,8 @@ function computeScores(evaluations: EvaluationResult[]): OverallScores {
   let totalLmiq = 0
   let totalLmiqElite = 0
   for (const e of evaluations) {
-    const humanTimeMs = HUMAN_REFERENCE[e.difficulty].timeSeconds * 1000
-    const eliteTimeMs = ELITE_HUMAN_REFERENCE[e.difficulty].timeSeconds * 1000
+    const humanTimeMs = HUMAN_BASELINE[e.difficulty].timeSeconds * 1000
+    const eliteTimeMs = ELITE_HUMAN_BASELINE[e.difficulty].timeSeconds * 1000
     const timeEff = Math.min(humanTimeMs / e.inferenceTimeMs, 1.0)
     const timeEffElite = Math.min(eliteTimeMs / e.inferenceTimeMs, 1.0)
     const pathEff = e.outcome === 'success' && e.efficiency !== null ? e.efficiency : 0
@@ -309,8 +290,8 @@ function computeScores(evaluations: EvaluationResult[]): OverallScores {
   let eliteHumanJoules = 0
   let llmJoules = 0
   for (const e of evaluations) {
-    const humanTimeSeconds = HUMAN_REFERENCE[e.difficulty].timeSeconds
-    const eliteTimeSeconds = ELITE_HUMAN_REFERENCE[e.difficulty].timeSeconds
+    const humanTimeSeconds = HUMAN_BASELINE[e.difficulty].timeSeconds
+    const eliteTimeSeconds = ELITE_HUMAN_BASELINE[e.difficulty].timeSeconds
     humanJoules += humanTimeSeconds * HUMAN_BRAIN_WATTS
     eliteHumanJoules += eliteTimeSeconds * HUMAN_BRAIN_WATTS
     llmJoules += (e.inferenceTimeMs / 1000) * LLM_GPU_WATTS
@@ -363,7 +344,7 @@ function pct(value: number): string {
  */
 function printScoreCard(modelName: string, scores: OverallScores): void {
   const avgHumanAccuracy =
-    DIFFICULTIES.reduce((a, d) => a + HUMAN_REFERENCE[d].accuracy, 0) / DIFFICULTIES.length
+    DIFFICULTIES.reduce((a, d) => a + HUMAN_BASELINE[d].accuracy, 0) / DIFFICULTIES.length
 
   console.log()
   console.log(
@@ -420,7 +401,7 @@ function printScoreCard(modelName: string, scores: OverallScores): void {
     const ds = scores.byDifficulty[difficulty]
     if (ds.total === 0) continue
 
-    const humanRef = HUMAN_REFERENCE[difficulty]
+    const humanRef = HUMAN_BASELINE[difficulty]
     const accStr = pct(ds.accuracy)
     const totalTimeSeconds = (ds.avgInferenceTimeMs * ds.total) / 1000
     const timeStr = formatDuration(totalTimeSeconds)
@@ -555,7 +536,7 @@ function printHumanScoreCard(runName: string, evaluations: EvaluationResult[]): 
 function printAllModelsSummary(evaluations: EvaluationResult[]): void {
   const models = getUniqueModels(evaluations)
   const avgHumanAccuracy =
-    DIFFICULTIES.reduce((a, d) => a + HUMAN_REFERENCE[d].accuracy, 0) / DIFFICULTIES.length
+    DIFFICULTIES.reduce((a, d) => a + HUMAN_BASELINE[d].accuracy, 0) / DIFFICULTIES.length
 
   console.log()
   console.log(chalk.bold('LMIQ Score Summary'))

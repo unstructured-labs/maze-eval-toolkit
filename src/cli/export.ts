@@ -22,6 +22,8 @@ interface VisualizerEvaluation {
   efficiency: number | null
   inferenceTimeMs: number
   costUsd: number | null
+  testSetId: string
+  testSetName: string
 }
 
 /**
@@ -141,8 +143,8 @@ function getTestSets(dbPath: string): TestSetInfo[] {
 function getAllEvaluations(dbPath: string, testSetId?: string): VisualizerEvaluation[] {
   const db = initDatabase(dbPath)
   const sql = testSetId
-    ? 'SELECT model, difficulty, prompt_formats, outcome, efficiency, inference_time_ms, cost_usd FROM evaluations WHERE test_set_id = ?'
-    : 'SELECT model, difficulty, prompt_formats, outcome, efficiency, inference_time_ms, cost_usd FROM evaluations'
+    ? 'SELECT model, difficulty, prompt_formats, outcome, efficiency, inference_time_ms, cost_usd, test_set_id, test_set_name FROM evaluations WHERE test_set_id = ?'
+    : 'SELECT model, difficulty, prompt_formats, outcome, efficiency, inference_time_ms, cost_usd, test_set_id, test_set_name FROM evaluations'
   const query = db.query(sql)
   const rows = (testSetId ? query.all(testSetId) : query.all()) as any[]
   closeDatabase()
@@ -155,6 +157,8 @@ function getAllEvaluations(dbPath: string, testSetId?: string): VisualizerEvalua
     efficiency: row.efficiency,
     inferenceTimeMs: row.inference_time_ms,
     costUsd: row.cost_usd,
+    testSetId: row.test_set_id,
+    testSetName: row.test_set_name,
   }))
 }
 

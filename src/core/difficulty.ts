@@ -165,3 +165,41 @@ export function getSpineFirstConfig(
     ...overrides,
   }
 }
+
+/**
+ * Human baseline reference for scoring
+ */
+export interface HumanBaselineConfig {
+  timeSeconds: number
+  accuracy: number
+}
+
+/**
+ * Average human reference values for scoring
+ */
+export const HUMAN_BASELINE: Record<Difficulty, HumanBaselineConfig> = {
+  simple: { timeSeconds: 10, accuracy: 1.0 },
+  easy: { timeSeconds: 20, accuracy: 1.0 },
+  medium: { timeSeconds: 30, accuracy: 0.98 },
+  hard: { timeSeconds: 60, accuracy: 0.96 },
+  nightmare: { timeSeconds: 90, accuracy: 0.93 },
+  horror: { timeSeconds: 90, accuracy: 0.96 },
+}
+
+/**
+ * Elite human reference values (faster times, higher accuracy)
+ */
+export const ELITE_HUMAN_BASELINE: Record<Difficulty, HumanBaselineConfig> = {
+  simple: { timeSeconds: 4, accuracy: 1.0 },
+  easy: { timeSeconds: 8, accuracy: 1.0 },
+  medium: { timeSeconds: 15, accuracy: 0.99 },
+  hard: { timeSeconds: 25, accuracy: 0.98 },
+  nightmare: { timeSeconds: 60, accuracy: 0.96 },
+  horror: { timeSeconds: 60, accuracy: 0.98 },
+}
+
+/**
+ * Constants for energy efficiency calculations
+ */
+export const HUMAN_BRAIN_WATTS = 20
+export const LLM_GPU_WATTS = 350

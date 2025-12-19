@@ -256,7 +256,7 @@ export default function HumanEval({
         onComplete={handleMazeComplete}
         startImmediately={skipReady}
         onStatsChange={handleStatsChange}
-        cellSize={isQuickRun ? 24 : 36}
+        cellSize={24}
       />
     </div>
   )

@@ -78,7 +78,7 @@ export function OutcomeChart({ data }: OutcomeChartProps) {
               {outcomes.map((outcome) => (
                 <div key={outcome} className="flex items-center gap-1">
                   <div
-                    className="w-[3px] h-[3px] rounded-sm"
+                    className="w-3 h-3 rounded-sm"
                     style={{ backgroundColor: OUTCOME_COLORS[outcome] || '#6b7280' }}
                   />
                   <span>{outcome}</span>

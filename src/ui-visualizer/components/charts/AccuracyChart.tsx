@@ -101,10 +101,7 @@ export function AccuracyChart({ data, humanBaseline }: AccuracyChartProps) {
             <div className="flex flex-wrap justify-center gap-x-4 text-xs text-gray-400">
               {legendPayload.map((item) => (
                 <div key={item.value} className="flex items-center gap-1">
-                  <div
-                    className="w-[3px] h-[3px] rounded-sm"
-                    style={{ backgroundColor: item.color }}
-                  />
+                  <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: item.color }} />
                   <span>{item.value}</span>
                 </div>
               ))}

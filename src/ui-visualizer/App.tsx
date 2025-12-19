@@ -23,11 +23,14 @@ export default function App() {
   const [error, setError] = useState<string | null>(null)
   const [useElite, setUseElite] = useState(false)
   const [difficultyFilter, setDifficultyFilter] = useState<Difficulty | 'all'>('all')
+  const [resultsFiles, setResultsFiles] = useState<string[]>([])
+  const [selectedResultsFile, setSelectedResultsFile] = useState<string>('')
 
   // Load results file
   const loadResults = useCallback(async (filename: string) => {
     setLoading(true)
     setError(null)
+    setSelectedResultsFile(filename)
 
     try {
       const response = await fetch(`/api/results/${filename}`)
@@ -49,10 +52,14 @@ export default function App() {
     fetch('/api/results')
       .then((r) => r.json())
       .then((d: { files: string[] }) => {
-        if (d.files.includes('results.json')) {
+        // Filter to only JSON files
+        const jsonFiles = d.files.filter((f: string) => f.endsWith('.json'))
+        setResultsFiles(jsonFiles)
+
+        if (jsonFiles.includes('results.json')) {
           loadResults('results.json')
-        } else if (d.files.length > 0 && d.files[0]) {
-          loadResults(d.files[0])
+        } else if (jsonFiles.length > 0 && jsonFiles[0]) {
+          loadResults(jsonFiles[0])
         } else {
           setLoading(false)
           setError('No results files found')
@@ -123,6 +130,21 @@ export default function App() {
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold">LMIQ Score Visualizer</h1>
           <div className="flex items-center gap-6">
+            {/* Results File Selector */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Results:</span>
+              <select
+                value={selectedResultsFile}
+                onChange={(e) => loadResults(e.target.value)}
+                className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm focus:outline-none"
+              >
+                {resultsFiles.map((file) => (
+                  <option key={file} value={file}>
+                    {file.replace('.json', '')}
+                  </option>
+                ))}
+              </select>
+            </div>
             {/* Difficulty Filter */}
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">Difficulty:</span>
