@@ -1,4 +1,5 @@
-import type { EvaluationResult } from '@/core/types'
+import type { Difficulty, EvaluationResult } from '@/core/types'
+import { DIFFICULTIES } from '@/core/types'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AccuracyChart } from './components/charts/AccuracyChart'
 import { EnergyEfficiencyChart } from './components/charts/EnergyEfficiencyChart'
@@ -21,7 +22,7 @@ export default function App() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [useElite, setUseElite] = useState(false)
-  const [accuracyWeight, setAccuracyWeight] = useState(1)
+  const [difficultyFilter, setDifficultyFilter] = useState<Difficulty | 'all'>('all')
 
   // Load results file
   const loadResults = useCallback(async (filename: string) => {
@@ -63,34 +64,40 @@ export default function App() {
       })
   }, [loadResults])
 
+  // Filter results by difficulty
+  const filteredResults = useMemo(() => {
+    if (difficultyFilter === 'all') return results
+    return results.filter((r) => r.difficulty === difficultyFilter)
+  }, [results, difficultyFilter])
+
   // Compute model+format scores (for metric charts)
   const modelFormatScores = useMemo(() => {
-    if (results.length === 0) return []
-    return aggregateByModelAndFormat(results, useElite, accuracyWeight)
-  }, [results, useElite, accuracyWeight])
+    if (filteredResults.length === 0) return []
+    return aggregateByModelAndFormat(filteredResults, useElite)
+  }, [filteredResults, useElite])
 
   // Compute human baseline (for charts - based on toggle)
   const humanBaseline = useMemo(() => {
-    return computeHumanBaseline(results, useElite, accuracyWeight)
-  }, [results, useElite, accuracyWeight])
+    return computeHumanBaseline(filteredResults, useElite)
+  }, [filteredResults, useElite])
 
   // Compute both human baselines for reference card
   const humanBaselineAvg = useMemo(() => {
-    return computeHumanBaseline(results, false, accuracyWeight)
-  }, [results, accuracyWeight])
+    return computeHumanBaseline(filteredResults, false)
+  }, [filteredResults])
 
   const humanBaselineElite = useMemo(() => {
-    return computeHumanBaseline(results, true, accuracyWeight)
-  }, [results, accuracyWeight])
+    return computeHumanBaseline(filteredResults, true)
+  }, [filteredResults])
 
   // Compute weighted average times based on difficulty distribution
   const humanTimes = useMemo(() => {
-    if (results.length === 0) return { avg: 0, elite: 0 }
+    if (filteredResults.length === 0) return { avg: 0, elite: 0 }
     const difficultyCount: Record<string, number> = {}
-    for (const r of results) {
+    for (const r of filteredResults) {
       difficultyCount[r.difficulty] = (difficultyCount[r.difficulty] || 0) + 1
     }
-    const total = results.length
+    const total = filteredResults.length
     let avgTime = 0
     let eliteTime = 0
     for (const [diff, count] of Object.entries(difficultyCount)) {
@@ -100,7 +107,7 @@ export default function App() {
         weight * ELITE_HUMAN_REFERENCE[diff as keyof typeof ELITE_HUMAN_REFERENCE].timeSeconds
     }
     return { avg: avgTime, elite: eliteTime }
-  }, [results])
+  }, [filteredResults])
 
   // Find best models for summary stats
   const bestAccuracy = useMemo(
@@ -116,19 +123,21 @@ export default function App() {
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold">LMIQ Score Visualizer</h1>
           <div className="flex items-center gap-6">
-            {/* Accuracy Weight Slider */}
+            {/* Difficulty Filter */}
             <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">LMIQ Accuracy Weight:</span>
-              <input
-                type="range"
-                min="1"
-                max="3"
-                step="0.5"
-                value={accuracyWeight}
-                onChange={(e) => setAccuracyWeight(Number(e.target.value))}
-                className="w-24 h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
-              />
-              <span className="text-sm font-mono w-8">{accuracyWeight}x</span>
+              <span className="text-sm text-muted-foreground">Difficulty:</span>
+              <select
+                value={difficultyFilter}
+                onChange={(e) => setDifficultyFilter(e.target.value as Difficulty | 'all')}
+                className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm focus:outline-none"
+              >
+                <option value="all">All</option>
+                {DIFFICULTIES.map((d) => (
+                  <option key={d} value={d}>
+                    {d.charAt(0).toUpperCase() + d.slice(1)}
+                  </option>
+                ))}
+              </select>
             </div>
             {/* Human Toggle */}
             <div className="flex items-center gap-3">
@@ -174,13 +183,20 @@ export default function App() {
           </div>
         )}
 
-        {!loading && !error && results.length > 0 && (
+        {!loading && !error && filteredResults.length > 0 && (
           <div className="space-y-8">
             {/* Summary Stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="bg-card rounded-lg p-4 border border-border">
                 <div className="text-muted-foreground text-sm">Total Evaluations</div>
-                <div className="text-2xl font-bold">{results.length}</div>
+                <div className="text-2xl font-bold">
+                  {filteredResults.length}
+                  {difficultyFilter !== 'all' && (
+                    <span className="text-sm font-normal text-muted-foreground ml-2">
+                      of {results.length}
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="bg-card rounded-lg p-4 border border-border">
                 <div className="text-muted-foreground text-sm">Human Baseline Reference</div>
@@ -238,8 +254,7 @@ export default function App() {
               <div className="bg-card rounded-lg p-4 border border-border">
                 <h2 className="text-lg font-semibold mb-1">LMIQ Score</h2>
                 <p className="text-xs text-muted-foreground mb-4">
-                  Composite score = Time Efficiency × Path Efficiency × Accuracy
-                  {accuracyWeight !== 1 ? <sup>{accuracyWeight}</sup> : null}. Measures overall
+                  Composite score = Time Efficiency × Path Efficiency × Accuracy. Measures overall
                   problem-solving capability relative to human performance.
                 </p>
                 <LMIQChart data={modelFormatScores} humanBaseline={humanBaseline} />

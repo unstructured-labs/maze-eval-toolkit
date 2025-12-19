@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS evaluations (
   id TEXT PRIMARY KEY,
   run_id TEXT NOT NULL,
   test_set_id TEXT NOT NULL,
+  test_set_name TEXT NOT NULL DEFAULT '',
   maze_id TEXT NOT NULL,
   model TEXT NOT NULL,
   difficulty TEXT NOT NULL,
@@ -67,7 +68,7 @@ CREATE INDEX IF NOT EXISTS idx_evaluations_is_human ON evaluations(is_human);
  */
 export const INSERT_EVALUATION = `
 INSERT INTO evaluations (
-  id, run_id, test_set_id, maze_id, model, difficulty,
+  id, run_id, test_set_id, test_set_name, maze_id, model, difficulty,
   prompt, prompt_formats, started_at, completed_at,
   input_tokens, output_tokens, reasoning_tokens,
   cost_usd, inference_time_ms,
@@ -76,7 +77,7 @@ INSERT INTO evaluations (
   solution_length, shortest_path, efficiency,
   is_human
 ) VALUES (
-  ?, ?, ?, ?, ?, ?,
+  ?, ?, ?, ?, ?, ?, ?,
   ?, ?, ?, ?,
   ?, ?, ?,
   ?, ?,

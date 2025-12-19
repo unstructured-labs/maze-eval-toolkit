@@ -343,6 +343,7 @@ async function runEvaluation(options: EvaluateOptions) {
         result = createEvaluationResult({
           runId,
           testSetId: testSet.id,
+          testSetName: testSet.name,
           mazeId: maze.id,
           model,
           difficulty,
@@ -414,6 +415,7 @@ async function runEvaluation(options: EvaluateOptions) {
         result = createEvaluationResult({
           runId,
           testSetId: testSet.id,
+          testSetName: testSet.name,
           mazeId: maze.id,
           model,
           difficulty,

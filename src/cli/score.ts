@@ -21,6 +21,7 @@ const HUMAN_REFERENCE: Record<Difficulty, { timeSeconds: number; accuracy: numbe
   medium: { timeSeconds: 30, accuracy: 0.98 },
   hard: { timeSeconds: 60, accuracy: 0.96 },
   nightmare: { timeSeconds: 90, accuracy: 0.93 },
+  horror: { timeSeconds: 150, accuracy: 0.9 },
 }
 
 /**
@@ -32,6 +33,7 @@ const ELITE_HUMAN_REFERENCE: Record<Difficulty, { timeSeconds: number; accuracy:
   medium: { timeSeconds: 15, accuracy: 0.99 },
   hard: { timeSeconds: 25, accuracy: 0.98 },
   nightmare: { timeSeconds: 60, accuracy: 0.96 },
+  horror: { timeSeconds: 100, accuracy: 0.94 },
 }
 
 const HUMAN_BRAIN_WATTS = 20
@@ -95,6 +97,7 @@ function getAllEvaluations(dbPath: string): EvaluationResult[] {
     id: row.id,
     runId: row.run_id,
     testSetId: row.test_set_id,
+    testSetName: row.test_set_name,
     mazeId: row.maze_id,
     model: row.model,
     difficulty: row.difficulty,
@@ -409,7 +412,9 @@ function printScoreCard(modelName: string, scores: OverallScores): void {
 
   console.log()
   console.log(chalk.bold('By Difficulty:'))
-  console.log(chalk.dim('               Accuracy   Efficiency   LMIQ'))
+  console.log(
+    chalk.dim('               Accuracy   Time         Efficiency   LMIQ (avg)   LMIQ (elite)'),
+  )
 
   for (const difficulty of DIFFICULTIES) {
     const ds = scores.byDifficulty[difficulty]
@@ -417,15 +422,19 @@ function printScoreCard(modelName: string, scores: OverallScores): void {
 
     const humanRef = HUMAN_REFERENCE[difficulty]
     const accStr = pct(ds.accuracy)
+    const totalTimeSeconds = (ds.avgInferenceTimeMs * ds.total) / 1000
+    const timeStr = formatDuration(totalTimeSeconds)
     const effStr = pct(ds.avgTimeEfficiency)
     const lmiqStr = pct(ds.avgLmiq)
+    const lmiqEliteStr = pct(ds.avgLmiqElite)
 
     const accColor = ds.accuracy >= humanRef.accuracy ? chalk.green : chalk.red
     const effColor = ds.avgTimeEfficiency >= 0.5 ? chalk.green : chalk.red
     const lmiqColor = ds.avgLmiq >= humanRef.accuracy * 0.8 ? chalk.green : chalk.red
+    const lmiqEliteColor = ds.avgLmiqElite >= humanRef.accuracy * 0.8 ? chalk.green : chalk.red
 
     console.log(
-      `  ${difficulty.padEnd(12)} ${accColor(accStr.padEnd(10))} ${effColor(effStr.padEnd(12))} ${lmiqColor(lmiqStr)}`,
+      `  ${difficulty.padEnd(12)} ${accColor(accStr.padEnd(10))} ${timeStr.padEnd(12)} ${effColor(effStr.padEnd(12))} ${lmiqColor(lmiqStr.padEnd(12))} ${lmiqEliteColor(lmiqEliteStr)}`,
     )
   }
 
@@ -673,15 +682,19 @@ async function promptForOptions(): Promise<ScoreOptions> {
     selectedModels = [models[0]!]
     console.log(chalk.dim(`Using model: ${selectedModels[0]}`))
   } else {
-    const modelChoices = models.map((m) => ({ name: m, value: m }))
+    const SUMMARIZE_ALL = '__summarize_all__'
+    const modelChoices = [
+      { name: chalk.bold('Summarize All'), value: SUMMARIZE_ALL },
+      ...models.map((m) => ({ name: m, value: m })),
+    ]
     selectedModels = await checkbox({
       message: 'Select models to score (space to select, enter to confirm):',
       choices: modelChoices,
       pageSize: modelChoices.length,
     })
 
-    // If none selected, show all
-    if (selectedModels.length === 0) {
+    // If "Summarize All" selected or none selected, show all
+    if (selectedModels.length === 0 || selectedModels.includes(SUMMARIZE_ALL)) {
       return { databasePath, models: undefined, runId: undefined }
     }
   }

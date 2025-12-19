@@ -27,12 +27,19 @@ export interface Position {
 /**
  * Difficulty levels for maze generation
  */
-export type Difficulty = 'simple' | 'easy' | 'medium' | 'hard' | 'nightmare'
+export type Difficulty = 'simple' | 'easy' | 'medium' | 'hard' | 'nightmare' | 'horror'
 
 /**
  * All difficulty levels in order
  */
-export const DIFFICULTIES: Difficulty[] = ['simple', 'easy', 'medium', 'hard', 'nightmare']
+export const DIFFICULTIES: Difficulty[] = [
+  'simple',
+  'easy',
+  'medium',
+  'hard',
+  'nightmare',
+  'horror',
+]
 
 /**
  * Configuration for a difficulty level
@@ -189,6 +196,7 @@ export interface EvaluationResult {
   id: string
   runId: string
   testSetId: string
+  testSetName: string
   mazeId: string
   model: string
   difficulty: Difficulty

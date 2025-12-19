@@ -187,7 +187,7 @@ function toOutputGrid(grid: GenerationCell[][]): Cell[][] {
  * @param maxAttempts - Maximum attempts to meet minShortestPath requirement
  * @returns Generated maze or null if unable to meet requirements
  */
-export function generateMaze(difficulty: Difficulty, maxAttempts = 1000): GeneratedMaze | null {
+export function generateMaze(difficulty: Difficulty, maxAttempts = 2500): GeneratedMaze | null {
   const config = getDifficultyConfig(difficulty)
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {

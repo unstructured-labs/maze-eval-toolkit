@@ -134,6 +134,7 @@ export default function App() {
         medium: [],
         hard: [],
         nightmare: [],
+        horror: [],
         [randomMaze.difficulty]: [randomMaze],
       },
       summary: {
@@ -144,6 +145,7 @@ export default function App() {
           medium: 0,
           hard: 0,
           nightmare: 0,
+          horror: 0,
           [randomMaze.difficulty]: 1,
         },
       },

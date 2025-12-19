@@ -13,6 +13,7 @@ export const HUMAN_REFERENCE: Record<Difficulty, { timeSeconds: number; accuracy
   medium: { timeSeconds: 30, accuracy: 0.98 },
   hard: { timeSeconds: 60, accuracy: 0.96 },
   nightmare: { timeSeconds: 90, accuracy: 0.93 },
+  horror: { timeSeconds: 150, accuracy: 0.9 },
 }
 
 /**
@@ -25,6 +26,7 @@ export const ELITE_HUMAN_REFERENCE: Record<Difficulty, { timeSeconds: number; ac
     medium: { timeSeconds: 15, accuracy: 0.99 },
     hard: { timeSeconds: 25, accuracy: 0.98 },
     nightmare: { timeSeconds: 60, accuracy: 0.96 },
+    horror: { timeSeconds: 100, accuracy: 0.94 },
   }
 
 const HUMAN_BRAIN_WATTS = 20
@@ -274,13 +276,31 @@ export const FORMAT_ORDER: PromptFormat[] = [
 ]
 
 /**
+ * Fixed model display order (by prefix matching)
+ */
+export const MODEL_ORDER_PREFIXES = ['gemini', 'gpt', 'claude', 'grok']
+
+/**
+ * Get model sort index based on MODEL_ORDER_PREFIXES
+ */
+export function getModelSortIndex(shortModel: string): number {
+  const lowerModel = shortModel.toLowerCase()
+  for (let i = 0; i < MODEL_ORDER_PREFIXES.length; i++) {
+    if (lowerModel.includes(MODEL_ORDER_PREFIXES[i]!)) {
+      return i
+    }
+  }
+  // Models not matching any prefix go to the end
+  return MODEL_ORDER_PREFIXES.length
+}
+
+/**
  * Compute scores for a model+format combination
  */
 export function computeModelFormatScores(
   evaluations: EvaluationResult[],
   format: PromptFormat,
   elite = false,
-  accuracyWeight = 1,
 ): ModelFormatScore {
   const reference = elite ? ELITE_HUMAN_REFERENCE : HUMAN_REFERENCE
   const model = evaluations[0]?.model || 'unknown'
@@ -321,10 +341,14 @@ export function computeModelFormatScores(
   const llmEnergyJoules = (totalInferenceTimeMs / 1000) * LLM_GPU_WATTS
   const energyEfficiency = llmEnergyJoules > 0 ? humanEnergyJoules / llmEnergyJoules : 0
 
-  // Calculate accuracy and apply weight to LMIQ
+  // Calculate accuracy
   const accuracy = total > 0 ? successes.length / total : 0
-  const weightedAccuracy = accuracy ** accuracyWeight
-  const avgLmiq = total > 0 ? (totalLmiq / total) * weightedAccuracy : 0
+
+  // Time efficiency averaged only over successful attempts
+  const avgTimeEfficiency = successes.length > 0 ? totalTimeEfficiency / successes.length : 0
+
+  // LMIQ = time_eff * path_eff * accuracy
+  const avgLmiq = successes.length > 0 ? (totalLmiq / successes.length) * accuracy : 0
 
   return {
     model,
@@ -334,7 +358,7 @@ export function computeModelFormatScores(
     successes: successes.length,
     accuracy,
     avgPathEfficiency,
-    avgTimeEfficiency: total > 0 ? totalTimeEfficiency / total : 0,
+    avgTimeEfficiency,
     avgLmiq,
     avgInferenceTimeMs: total > 0 ? totalInferenceTimeMs / total : 0,
     totalCost,
@@ -368,7 +392,6 @@ function getEffectiveFormat(promptFormats: PromptFormat[]): PromptFormat | null 
 export function aggregateByModelAndFormat(
   results: EvaluationResult[],
   elite = false,
-  accuracyWeight = 1,
 ): ModelWithFormats[] {
   // Group by model, then by format
   const byModelFormat = new Map<string, Map<PromptFormat, EvaluationResult[]>>()
@@ -393,7 +416,7 @@ export function aggregateByModelAndFormat(
   for (const [model, formatMap] of byModelFormat) {
     const formats: ModelFormatScore[] = []
     for (const [format, evals] of formatMap) {
-      formats.push(computeModelFormatScores(evals, format, elite, accuracyWeight))
+      formats.push(computeModelFormatScores(evals, format, elite))
     }
     // Sort formats by fixed order
     formats.sort((a, b) => {
@@ -412,11 +435,9 @@ export function aggregateByModelAndFormat(
     })
   }
 
-  // Sort models by best accuracy (best format) descending
+  // Sort models by fixed order (google, gpt, claude, grok)
   return modelResults.sort((a, b) => {
-    const bestA = a.formats[0]?.accuracy ?? 0
-    const bestB = b.formats[0]?.accuracy ?? 0
-    return bestB - bestA
+    return getModelSortIndex(a.shortModel) - getModelSortIndex(b.shortModel)
   })
 }
 
@@ -424,11 +445,7 @@ export function aggregateByModelAndFormat(
  * Compute human baseline scores based on reference values
  * Human by definition has 100% time efficiency and path efficiency
  */
-export function computeHumanBaseline(
-  results: EvaluationResult[],
-  elite = false,
-  accuracyWeight = 1,
-): HumanBaseline {
+export function computeHumanBaseline(results: EvaluationResult[], elite = false): HumanBaseline {
   const reference = elite ? ELITE_HUMAN_REFERENCE : HUMAN_REFERENCE
 
   // Weighted average of human accuracy by difficulty distribution in results
@@ -438,6 +455,7 @@ export function computeHumanBaseline(
     medium: 0,
     hard: 0,
     nightmare: 0,
+    horror: 0,
   }
 
   for (const r of results) {
@@ -459,14 +477,13 @@ export function computeHumanBaseline(
 
   // Human time efficiency = 1.0 (by definition, human is the reference)
   // Human path efficiency = 1.0 (assume optimal)
-  // Human LMIQ = time_eff * path_eff * accuracy^weight = 1 * 1 * accuracy^weight
+  // Human LMIQ = time_eff * path_eff * accuracy = 1 * 1 * accuracy
   // Human energy efficiency = 1.0 (reference point)
-  const weightedLmiq = weightedAccuracy ** accuracyWeight
 
   return {
     accuracy: weightedAccuracy,
     timeEfficiency: 1.0,
-    lmiq: weightedLmiq,
+    lmiq: weightedAccuracy,
     energyEfficiency: 1.0,
   }
 }

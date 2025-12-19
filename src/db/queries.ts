@@ -29,6 +29,7 @@ export function insertEvaluation(db: Database, result: EvaluationResult): void {
     result.id,
     result.runId,
     result.testSetId,
+    result.testSetName,
     result.mazeId,
     result.model,
     result.difficulty,
@@ -61,6 +62,7 @@ interface EvaluationRow {
   id: string
   run_id: string
   test_set_id: string
+  test_set_name: string
   maze_id: string
   model: string
   difficulty: string
@@ -93,6 +95,7 @@ function rowToResult(row: EvaluationRow): EvaluationResult {
     id: row.id,
     runId: row.run_id,
     testSetId: row.test_set_id,
+    testSetName: row.test_set_name,
     mazeId: row.maze_id,
     model: row.model,
     difficulty: row.difficulty as Difficulty,

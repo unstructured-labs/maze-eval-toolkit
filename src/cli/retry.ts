@@ -128,6 +128,7 @@ function getEvaluationsToRetry(
     id: row.id as string,
     runId: row.run_id as string,
     testSetId: row.test_set_id as string,
+    testSetName: row.test_set_name as string,
     mazeId: row.maze_id as string,
     model: row.model as string,
     difficulty: row.difficulty as Difficulty,

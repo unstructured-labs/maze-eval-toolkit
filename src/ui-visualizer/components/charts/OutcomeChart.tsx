@@ -39,15 +39,20 @@ export function OutcomeChart({ data }: OutcomeChartProps) {
   })
 
   return (
-    <ResponsiveContainer width="100%" height={450}>
-      <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+    <ResponsiveContainer width="100%" height={350}>
+      <BarChart
+        data={chartData}
+        barCategoryGap="8%"
+        margin={{ top: 20, right: 30, left: 20, bottom: 40 }}
+      >
         <CartesianGrid strokeDasharray="3 3" stroke="#333" />
         <XAxis
           dataKey="name"
-          tick={{ fill: '#a3a3a3', fontSize: 12 }}
+          tick={{ fill: '#a3a3a3', fontSize: 11 }}
           angle={-45}
           textAnchor="end"
-          height={60}
+          height={50}
+          interval={0}
         />
         <YAxis tick={{ fill: '#a3a3a3' }} domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
         <Tooltip
@@ -65,13 +70,33 @@ export function OutcomeChart({ data }: OutcomeChartProps) {
             return item?.fullName || label
           }}
         />
-        <Legend verticalAlign="top" height={36} wrapperStyle={{ color: '#a3a3a3' }} />
+        <Legend
+          verticalAlign="top"
+          height={64}
+          content={() => (
+            <div className="flex flex-wrap justify-center gap-x-4 text-xs text-gray-400">
+              {outcomes.map((outcome) => (
+                <div key={outcome} className="flex items-center gap-1">
+                  <div
+                    className="w-[3px] h-[3px] rounded-sm"
+                    style={{ backgroundColor: OUTCOME_COLORS[outcome] || '#6b7280' }}
+                  />
+                  <span>{outcome}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        />
         {outcomes.map((outcome) => (
           <Bar
             key={outcome}
             dataKey={outcome}
             stackId="outcomes"
             fill={OUTCOME_COLORS[outcome] || '#6b7280'}
+            fillOpacity={0.7}
+            stroke={OUTCOME_COLORS[outcome] || '#6b7280'}
+            strokeWidth={1}
+            radius={[1, 1, 0, 0]}
           />
         ))}
       </BarChart>

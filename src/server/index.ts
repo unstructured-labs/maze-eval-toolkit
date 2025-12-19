@@ -91,6 +91,7 @@ interface HumanMazeResult {
 interface HumanEvalSubmission {
   runName: string
   testSetId: string
+  testSetName?: string
   startedAt: string
   completedAt: string
   results: HumanMazeResult[]
@@ -100,7 +101,7 @@ interface HumanEvalSubmission {
 app.post('/api/human-evals', async (c) => {
   try {
     const body = (await c.req.json()) as HumanEvalSubmission
-    const { runName, testSetId, startedAt, completedAt, results } = body
+    const { runName, testSetId, testSetName, startedAt, completedAt, results } = body
 
     if (!runName || !testSetId || !results || results.length === 0) {
       return c.json({ error: 'Missing required fields' }, 400)
@@ -118,6 +119,7 @@ app.post('/api/human-evals', async (c) => {
         id: uuidv4(),
         runId,
         testSetId,
+        testSetName: testSetName ?? 'Human Evaluation',
         mazeId: result.mazeId,
         model,
         difficulty: result.difficulty,

@@ -59,15 +59,19 @@ export function LMIQChart({ data, humanBaseline }: LMIQChartProps) {
   ]
 
   return (
-    <ResponsiveContainer width="100%" height={400}>
-      <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
+    <ResponsiveContainer width="100%" height={350}>
+      <BarChart
+        data={chartData}
+        barCategoryGap="8%"
+        margin={{ top: 20, right: 30, left: 20, bottom: 50 }}
+      >
         <CartesianGrid strokeDasharray="3 3" stroke="#333" />
         <XAxis
           dataKey="name"
           tick={{ fill: '#a3a3a3', fontSize: 11 }}
           angle={-45}
           textAnchor="end"
-          height={80}
+          height={60}
           interval={0}
         />
         <YAxis
@@ -92,12 +96,15 @@ export function LMIQChart({ data, humanBaseline }: LMIQChartProps) {
         />
         <Legend
           verticalAlign="top"
-          height={36}
+          height={64}
           content={() => (
-            <div className="flex justify-center gap-4 text-xs text-gray-400">
+            <div className="flex flex-wrap justify-center gap-x-4 text-xs text-gray-400">
               {legendPayload.map((item) => (
                 <div key={item.value} className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: item.color }} />
+                  <div
+                    className="w-[3px] h-[3px] rounded-sm"
+                    style={{ backgroundColor: item.color }}
+                  />
                   <span>{item.value}</span>
                 </div>
               ))}
@@ -115,23 +122,24 @@ export function LMIQChart({ data, humanBaseline }: LMIQChartProps) {
             position: 'insideBottomRight',
           }}
         />
-        {/* Render bars with human in the middle for centering */}
-        {formats.slice(0, Math.ceil(formats.length / 2)).map((format) => (
+        <Bar
+          dataKey="human"
+          fill="#3b82f6"
+          fillOpacity={0.7}
+          stroke="#3b82f6"
+          strokeWidth={1}
+          radius={[1, 1, 0, 0]}
+          name="Human"
+        />
+        {formats.map((format) => (
           <Bar
             key={format}
             dataKey={format}
             fill={FORMAT_COLORS[format] || '#6b7280'}
-            radius={[4, 4, 0, 0]}
-            name={format}
-          />
-        ))}
-        <Bar dataKey="human" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Human" />
-        {formats.slice(Math.ceil(formats.length / 2)).map((format) => (
-          <Bar
-            key={format}
-            dataKey={format}
-            fill={FORMAT_COLORS[format] || '#6b7280'}
-            radius={[4, 4, 0, 0]}
+            fillOpacity={0.7}
+            stroke={FORMAT_COLORS[format] || '#6b7280'}
+            strokeWidth={1}
+            radius={[1, 1, 0, 0]}
             name={format}
           />
         ))}

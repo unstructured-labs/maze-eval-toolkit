@@ -89,6 +89,7 @@ async function runGeneration(options: GenerateOptions) {
       medium: [],
       hard: [],
       nightmare: [],
+      horror: [],
     },
     summary: {
       totalMazes: 0,
@@ -98,6 +99,7 @@ async function runGeneration(options: GenerateOptions) {
         medium: 0,
         hard: 0,
         nightmare: 0,
+        horror: 0,
       },
     },
   }

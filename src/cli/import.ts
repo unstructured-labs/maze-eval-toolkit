@@ -120,6 +120,7 @@ async function runImport(options: ImportOptions) {
       medium: [],
       hard: [],
       nightmare: [],
+      horror: [],
     },
     summary: {
       totalMazes: 0,
@@ -129,6 +130,7 @@ async function runImport(options: ImportOptions) {
         medium: 0,
         hard: 0,
         nightmare: 0,
+        horror: 0,
       },
     },
   }

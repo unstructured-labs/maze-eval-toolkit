@@ -119,12 +119,32 @@ function findDatabases(): string[] {
     .map((f) => `${resultsDir}/${f}`)
 }
 
-function getAllEvaluations(dbPath: string): VisualizerEvaluation[] {
+interface TestSetInfo {
+  id: string
+  name: string
+}
+
+function getTestSets(dbPath: string): TestSetInfo[] {
   const db = initDatabase(dbPath)
   const query = db.query(
-    'SELECT model, difficulty, prompt_formats, outcome, efficiency, inference_time_ms, cost_usd FROM evaluations',
+    'SELECT DISTINCT test_set_id, test_set_name FROM evaluations ORDER BY test_set_id',
   )
-  const rows = query.all() as any[]
+  const rows = query.all() as { test_set_id: string; test_set_name: string }[]
+  closeDatabase()
+
+  return rows.map((row) => ({
+    id: row.test_set_id,
+    name: row.test_set_name || row.test_set_id,
+  }))
+}
+
+function getAllEvaluations(dbPath: string, testSetId?: string): VisualizerEvaluation[] {
+  const db = initDatabase(dbPath)
+  const sql = testSetId
+    ? 'SELECT model, difficulty, prompt_formats, outcome, efficiency, inference_time_ms, cost_usd FROM evaluations WHERE test_set_id = ?'
+    : 'SELECT model, difficulty, prompt_formats, outcome, efficiency, inference_time_ms, cost_usd FROM evaluations'
+  const query = db.query(sql)
+  const rows = (testSetId ? query.all(testSetId) : query.all()) as any[]
   closeDatabase()
 
   return rows.map((row) => ({
@@ -157,17 +177,41 @@ async function run() {
     pageSize: databases.length,
   })
 
+  // Find available test sets
+  const testSets = getTestSets(databasePath)
+  if (testSets.length === 0) {
+    console.error(chalk.red('No test sets found in database'))
+    process.exit(1)
+  }
+
+  const testSetChoices = [
+    { name: 'All test sets', value: '__all__' },
+    ...testSets.map((t) => ({
+      name: t.name !== t.id ? `${t.name} (${t.id})` : t.id,
+      value: t.id,
+    })),
+  ]
+
+  const selectedTestSet = await select({
+    message: 'Select test set to export:',
+    choices: testSetChoices,
+    pageSize: testSetChoices.length,
+  })
+
+  const testSetId = selectedTestSet === '__all__' ? undefined : selectedTestSet
+
   // Output path
+  const defaultFileName = testSetId ? `results-${testSetId}.json` : 'results.json'
   const outputPath = await input({
     message: 'Output JSON path:',
-    default: './results/results.json',
+    default: `./results/${defaultFileName}`,
   })
 
   // Load and export
   console.log()
   console.log('Exporting results...')
 
-  const results = getAllEvaluations(databasePath)
+  const results = getAllEvaluations(databasePath, testSetId)
   writeFileSync(outputPath, JSON.stringify(results, null, 2), 'utf-8')
 
   // Generate condensed mini version

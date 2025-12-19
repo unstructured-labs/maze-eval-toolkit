@@ -53,9 +53,18 @@ export const DIFFICULTY_SETTINGS: Record<Difficulty, DifficultyConfig> = {
     maxWidth: 38,
     minHeight: 18,
     maxHeight: 22,
-    extraPaths: 0, // Pure DFS maze = harder
+    extraPaths: 5,
     minShortestPath: 50,
     label: 'Nightmare',
+  },
+  horror: {
+    minWidth: 35,
+    maxWidth: 50,
+    minHeight: 20,
+    maxHeight: 30,
+    extraPaths: 3,
+    minShortestPath: 100,
+    label: 'Horror',
   },
 }
 
