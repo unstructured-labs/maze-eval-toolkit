@@ -255,6 +255,7 @@ export const FORMAT_COLORS: Record<PromptFormat, string> = {
   block: '#4ade80', // green-400
   adjacency: '#fbbf24', // amber-400
   edges: '#f87171', // red-400
+  edges_ascii: '#fb923c', // orange-400
   coordmatrix: '#a78bfa', // violet-400
   matrix2d: '#22d3ee', // cyan-400
   coordtoken: '#c084fc', // purple-400
@@ -263,7 +264,14 @@ export const FORMAT_COLORS: Record<PromptFormat, string> = {
 /**
  * Fixed format display order
  */
-export const FORMAT_ORDER: PromptFormat[] = ['edges', 'adjacency', 'coordtoken', 'block', 'ascii']
+export const FORMAT_ORDER: PromptFormat[] = [
+  'edges_ascii',
+  'edges',
+  'adjacency',
+  'coordtoken',
+  'block',
+  'ascii',
+]
 
 /**
  * Compute scores for a model+format combination
@@ -335,6 +343,26 @@ export function computeModelFormatScores(
 }
 
 /**
+ * Determine the effective format from a promptFormats array
+ * Handles combined formats like ["ascii", "edges"] -> "edges_ascii"
+ */
+function getEffectiveFormat(promptFormats: PromptFormat[]): PromptFormat | null {
+  if (!promptFormats || promptFormats.length === 0) return null
+
+  // Check for combined edges + ascii format (either order)
+  if (promptFormats.length === 2) {
+    const hasEdges = promptFormats.includes('edges')
+    const hasAscii = promptFormats.includes('ascii')
+    if (hasEdges && hasAscii) {
+      return 'edges_ascii'
+    }
+  }
+
+  // Single format or unrecognized combo - use first
+  return promptFormats[0] ?? null
+}
+
+/**
  * Aggregate results by model and format
  */
 export function aggregateByModelAndFormat(
@@ -346,8 +374,8 @@ export function aggregateByModelAndFormat(
   const byModelFormat = new Map<string, Map<PromptFormat, EvaluationResult[]>>()
 
   for (const result of results) {
-    // Get the format used (first one in the array)
-    const format = result.promptFormats[0]
+    // Get the effective format (handles combined formats)
+    const format = getEffectiveFormat(result.promptFormats)
     if (!format) continue
 
     if (!byModelFormat.has(result.model)) {

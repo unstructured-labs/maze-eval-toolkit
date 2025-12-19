@@ -7,8 +7,22 @@ import { ExitPromptError } from '@inquirer/core'
 import { input, select } from '@inquirer/prompts'
 import chalk from 'chalk'
 import { Command } from 'commander'
-import type { EvaluationResult } from '../core/types'
+import type { Difficulty, EvaluationOutcome, PromptFormat } from '../core/types'
 import { closeDatabase, initDatabase } from '../db/client'
+
+/**
+ * Minimal evaluation data required for the visualizer
+ * Excludes large fields like prompt, rawResponse, parsedMoves, reasoning
+ */
+interface VisualizerEvaluation {
+  model: string
+  difficulty: Difficulty
+  promptFormats: PromptFormat[]
+  outcome: EvaluationOutcome
+  efficiency: number | null
+  inferenceTimeMs: number
+  costUsd: number | null
+}
 
 function findDatabases(): string[] {
   const resultsDir = './results'
@@ -18,38 +32,22 @@ function findDatabases(): string[] {
     .map((f) => `${resultsDir}/${f}`)
 }
 
-function getAllEvaluations(dbPath: string): EvaluationResult[] {
+function getAllEvaluations(dbPath: string): VisualizerEvaluation[] {
   const db = initDatabase(dbPath)
-  const query = db.query('SELECT * FROM evaluations')
+  const query = db.query(
+    'SELECT model, difficulty, prompt_formats, outcome, efficiency, inference_time_ms, cost_usd FROM evaluations',
+  )
   const rows = query.all() as any[]
   closeDatabase()
 
   return rows.map((row) => ({
-    id: row.id,
-    runId: row.run_id,
-    testSetId: row.test_set_id,
-    mazeId: row.maze_id,
     model: row.model,
     difficulty: row.difficulty,
-    prompt: row.prompt,
     promptFormats: JSON.parse(row.prompt_formats),
-    startedAt: row.started_at,
-    completedAt: row.completed_at,
-    inputTokens: row.input_tokens,
-    outputTokens: row.output_tokens,
-    reasoningTokens: row.reasoning_tokens,
-    costUsd: row.cost_usd,
-    inferenceTimeMs: row.inference_time_ms,
-    rawResponse: row.raw_response,
-    parsedMoves: row.parsed_moves ? JSON.parse(row.parsed_moves) : null,
-    reasoning: row.reasoning,
     outcome: row.outcome,
-    movesExecuted: row.moves_executed,
-    finalPosition: row.final_position ? JSON.parse(row.final_position) : null,
-    solutionLength: row.solution_length,
-    shortestPath: row.shortest_path,
     efficiency: row.efficiency,
-    isHuman: row.is_human === 1,
+    inferenceTimeMs: row.inference_time_ms,
+    costUsd: row.cost_usd,
   }))
 }
 

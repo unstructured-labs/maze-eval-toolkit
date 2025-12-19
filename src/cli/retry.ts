@@ -2,7 +2,7 @@
  * CLI command for retrying failed evaluations
  */
 
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs'
 import { ExitPromptError } from '@inquirer/core'
 import { checkbox, confirm, select } from '@inquirer/prompts'
 import chalk from 'chalk'
@@ -325,6 +325,13 @@ async function run() {
   console.log(chalk.bold('Retrying...'))
   console.log()
 
+  // Setup debug log file
+  const logDir = './debug'
+  if (!existsSync(logDir)) {
+    mkdirSync(logDir, { recursive: true })
+  }
+  const logPath = `${logDir}/retry-${Date.now()}.log`
+
   // Initialize database for updates
   const db = initDatabase(databasePath)
 
@@ -357,11 +364,24 @@ async function run() {
         if (!response.rawResponse || response.rawResponse.trim() === '') {
           if (response.finishReason === 'length') {
             outcome = 'token_limit'
+            appendFileSync(
+              logPath,
+              `\n--- TOKEN LIMIT DEBUG (maze: ${evaluation.mazeId}, difficulty: ${evaluation.difficulty}) ---\nFinish reason: ${response.finishReason}\nTokens: input=${response.stats.inputTokens}, output=${response.stats.outputTokens}, reasoning=${response.stats.reasoningTokens}\n--- END TOKEN LIMIT DEBUG ---\n\n`,
+            )
           } else {
             outcome = 'empty_response'
+            appendFileSync(
+              logPath,
+              `\n--- EMPTY RESPONSE DEBUG (maze: ${evaluation.mazeId}, difficulty: ${evaluation.difficulty}) ---\nFinish reason: ${response.finishReason}\nTokens: input=${response.stats.inputTokens}, output=${response.stats.outputTokens}, reasoning=${response.stats.reasoningTokens}\nRaw response: "${response.rawResponse}"\n--- END EMPTY RESPONSE DEBUG ---\n\n`,
+            )
           }
         } else if (response.parseError || !response.parsedMoves) {
           outcome = 'parse_error'
+          // Log parse error details to debug file
+          appendFileSync(
+            logPath,
+            `\n--- PARSE ERROR DEBUG (maze: ${evaluation.mazeId}, difficulty: ${evaluation.difficulty}) ---\nError: ${response.parseError ?? 'No parsed moves'}\nRaw response:\n${response.rawResponse}\n--- END PARSE ERROR DEBUG ---\n\n`,
+          )
         } else {
           validation = validateSolution(
             maze.grid,

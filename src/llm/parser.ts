@@ -100,6 +100,8 @@ function tryParseObjectFormat(content: string): ParsedResponse | null {
  * Extract moves from LLM response content using multiple strategies
  */
 export function parseResponse(content: string): ParsedResponse {
+  const diagnostics: string[] = []
+
   // Strategy 0: Try the object format first { comments: ..., actions: [...] }
   const objectResult = tryParseObjectFormat(content)
   if (objectResult) return objectResult
@@ -109,6 +111,7 @@ export function parseResponse(content: string): ParsedResponse {
   if (codeBlockMatch?.[1]) {
     const moves = tryParseJson(codeBlockMatch[1])
     if (moves !== null) return { moves }
+    diagnostics.push(`Found code block array but moves invalid: ${codeBlockMatch[1].slice(0, 100)}`)
   }
 
   // Strategy 2: Find the LAST JSON array in the response
@@ -122,6 +125,7 @@ export function parseResponse(content: string): ParsedResponse {
         if (moves !== null) return { moves }
       }
     }
+    diagnostics.push(`Found ${allArrayMatches.length} array(s) but none had valid moves`)
   }
 
   // Strategy 3: Try greedy match for the first complete array
@@ -129,6 +133,7 @@ export function parseResponse(content: string): ParsedResponse {
   if (greedyMatch?.[0]) {
     const moves = tryParseJson(greedyMatch[0])
     if (moves !== null) return { moves }
+    diagnostics.push(`Greedy array match failed: ${greedyMatch[0].slice(0, 100)}`)
   }
 
   // Strategy 4: Look for comma-separated list of actions
@@ -145,11 +150,24 @@ export function parseResponse(content: string): ParsedResponse {
       }
     }
     if (moves.length > 0) return { moves }
+    diagnostics.push('Found comma-separated actions but validation failed')
   }
 
-  // Failed to parse
+  // Build detailed error message
+  const contentPreview = content.length > 200 ? `${content.slice(0, 200)}...` : content
+  const hasJsonChars = content.includes('[') || content.includes('{')
+  const errorParts = [
+    'Could not extract valid moves from response.',
+    `Response length: ${content.length} chars.`,
+    hasJsonChars ? 'Contains JSON-like chars.' : 'No JSON-like structure found.',
+  ]
+  if (diagnostics.length > 0) {
+    errorParts.push(`Tried: ${diagnostics.join('; ')}`)
+  }
+  errorParts.push(`Preview: ${contentPreview}`)
+
   return {
     moves: null,
-    error: 'Could not extract valid moves from response',
+    error: errorParts.join(' '),
   }
 }

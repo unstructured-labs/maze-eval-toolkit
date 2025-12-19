@@ -218,7 +218,7 @@ async function runEvaluation(options: EvaluateOptions) {
   if (!existsSync(logDir)) {
     mkdirSync(logDir, { recursive: true })
   }
-  const logPath = `${logDir}/eval-${runId}.log`
+  const logPath = `${logDir}/eval-${Date.now()}.log`
   // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape codes
   const ansiRegex = /\x1b\[[0-9;]*m/g
   const log = (msg: string) => {
@@ -281,9 +281,17 @@ async function runEvaluation(options: EvaluateOptions) {
             // Hit token limit while reasoning
             outcome = 'token_limit'
             tokenLimits++
+            appendFileSync(
+              logPath,
+              `\n--- TOKEN LIMIT DEBUG (maze: ${maze.id}, difficulty: ${difficulty}) ---\nFinish reason: ${response.finishReason}\nTokens: input=${response.stats.inputTokens}, output=${response.stats.outputTokens}, reasoning=${response.stats.reasoningTokens}\n--- END TOKEN LIMIT DEBUG ---\n\n`,
+            )
           } else {
             outcome = 'empty_response'
             emptyResponses++
+            appendFileSync(
+              logPath,
+              `\n--- EMPTY RESPONSE DEBUG (maze: ${maze.id}, difficulty: ${difficulty}) ---\nFinish reason: ${response.finishReason}\nTokens: input=${response.stats.inputTokens}, output=${response.stats.outputTokens}, reasoning=${response.stats.reasoningTokens}\nRaw response: "${response.rawResponse}"\n--- END EMPTY RESPONSE DEBUG ---\n\n`,
+            )
           }
         } else if (response.parseError || response.parsedMoves === null) {
           outcome = 'parse_error'
@@ -291,7 +299,7 @@ async function runEvaluation(options: EvaluateOptions) {
           // Log parse error details to debug file
           appendFileSync(
             logPath,
-            `\n--- PARSE ERROR DEBUG (maze: ${maze.id}) ---\nError: ${response.parseError ?? 'No parsed moves'}\nRaw response:\n${response.rawResponse}\n--- END PARSE ERROR DEBUG ---\n\n`,
+            `\n--- PARSE ERROR DEBUG (maze: ${maze.id}, difficulty: ${difficulty}) ---\nError: ${response.parseError ?? 'No parsed moves'}\nRaw response:\n${response.rawResponse}\n--- END PARSE ERROR DEBUG ---\n\n`,
           )
         } else if (response.parsedMoves.length === 0) {
           // Model returned empty array - believes no path exists
@@ -395,6 +403,13 @@ async function runEvaluation(options: EvaluateOptions) {
         // API error
         const completedAt = new Date().toISOString()
         const errorMsg = err instanceof Error ? err.message : String(err)
+        const errorStack = err instanceof Error ? err.stack : undefined
+
+        // Log detailed error info to debug file
+        appendFileSync(
+          logPath,
+          `\n--- API ERROR DEBUG (maze: ${maze.id}) ---\nError: ${errorMsg}\n${errorStack ? `Stack:\n${errorStack}\n` : ''}--- END API ERROR DEBUG ---\n\n`,
+        )
 
         result = createEvaluationResult({
           runId,
