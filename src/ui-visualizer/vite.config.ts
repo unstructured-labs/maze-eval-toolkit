@@ -7,6 +7,7 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [react()],
   root: resolve(__dirname),
+  cacheDir: resolve(__dirname, '../../node_modules/.vite-ui-visualizer'),
   resolve: {
     alias: {
       '@': resolve(__dirname, '..'),
