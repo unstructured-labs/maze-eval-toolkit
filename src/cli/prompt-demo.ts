@@ -12,7 +12,7 @@ import type { Difficulty, MazeWithPrompts, PromptFormat, TestSetFile } from '../
 import { DIFFICULTIES, PROMPT_FORMATS } from '../core/types'
 
 function findTestSets(): string[] {
-  const dataDir = './data'
+  const dataDir = './test-sets'
   if (!existsSync(dataDir)) return []
   return readdirSync(dataDir)
     .filter((f) => f.endsWith('.json'))
@@ -27,7 +27,7 @@ async function run() {
   // Find available test sets
   const testSets = findTestSets()
   if (testSets.length === 0) {
-    console.error(chalk.red('No test sets found in ./data/'))
+    console.error(chalk.red('No test sets found in ./test-sets/'))
     console.error('Run `task generate` to create one')
     process.exit(1)
   }

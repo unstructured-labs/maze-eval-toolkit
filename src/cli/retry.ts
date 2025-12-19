@@ -158,8 +158,8 @@ function getEvaluationsToRetry(
 }
 
 function loadTestSet(testSetId: string): TestSetFile | null {
-  // Look for test set in ./data/ directory
-  const dataDir = './data'
+  // Look for test set in ./test-sets/ directory
+  const dataDir = './test-sets'
   if (!existsSync(dataDir)) return null
 
   const files = readdirSync(dataDir).filter((f) => f.endsWith('.json'))
@@ -285,7 +285,7 @@ async function run() {
   const testSet = loadTestSet(selectedRun.testSetId)
   if (!testSet) {
     console.error(chalk.red(`Could not find test set: ${selectedRun.testSetId}`))
-    console.error('Make sure the test set JSON file exists in ./data/')
+    console.error('Make sure the test set JSON file exists in ./test-sets/')
     process.exit(1)
   }
 

@@ -22,7 +22,7 @@ import type {
 import { DIFFICULTIES } from '../core/types'
 
 const INPUT_DIR = './input'
-const DEFAULT_OUTPUT_PATH = './data/imported-test-set.json'
+const DEFAULT_OUTPUT_PATH = './test-sets/imported-test-set.json'
 
 /**
  * Format of input maze files from input/ directory

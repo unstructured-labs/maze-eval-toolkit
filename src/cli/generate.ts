@@ -54,7 +54,7 @@ async function promptForOptions(): Promise<GenerateOptions> {
 
   const outputPath = await input({
     message: 'Output file path:',
-    default: './data/test-set.json',
+    default: './test-sets/test-set.json',
   })
 
   console.log()
@@ -193,7 +193,7 @@ export const generateCommand = new Command('generate')
       const difficulties = options.difficulties
         ? (options.difficulties.split(',').map((d: string) => d.trim()) as Difficulty[])
         : DIFFICULTIES
-      const outputPath = options.output || './data/test-set.json'
+      const outputPath = options.output || './test-sets/test-set.json'
       const name = options.name || 'LMIQ Test Set'
 
       // Validate difficulties
