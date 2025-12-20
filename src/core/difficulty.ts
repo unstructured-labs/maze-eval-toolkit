@@ -202,4 +202,4 @@ export const ELITE_HUMAN_BASELINE: Record<Difficulty, HumanBaselineConfig> = {
  * Constants for energy efficiency calculations
  */
 export const HUMAN_BRAIN_WATTS = 20
-export const LLM_GPU_WATTS = 350
+export const LLM_GPU_WATTS = 2000

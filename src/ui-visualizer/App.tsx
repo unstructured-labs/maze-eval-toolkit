@@ -301,7 +301,7 @@ export default function App() {
                 </h2>
                 <p className="text-xs text-muted-foreground mb-4">
                   Multiplier = LLM energy ÷ human energy. Assumes human brain at 20W, LLM inference
-                  at 350W (single GPU). Values &gt;1x indicate less efficient than human.
+                  at 2kW. Values &gt;1x indicate less efficient than human.
                 </p>
                 <EnergyEfficiencyChart data={modelFormatScores} humanBaseline={humanBaseline} />
               </div>
