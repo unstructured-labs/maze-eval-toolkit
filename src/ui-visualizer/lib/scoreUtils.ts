@@ -2,13 +2,8 @@
  * Score calculation utilities for the visualizer
  */
 
-import {
-  ELITE_HUMAN_BASELINE,
-  HUMAN_BASELINE,
-  HUMAN_BRAIN_WATTS,
-  LLM_GPU_WATTS,
-  getEffectiveBaseline,
-} from '@/core/difficulty'
+import { ELITE_HUMAN_BASELINE, HUMAN_BASELINE, getEffectiveBaseline } from '@/core/difficulty'
+import { computeScores as computeCoreScores } from '@/core/scoring'
 import type {
   Difficulty,
   EvaluationOutcome,
@@ -88,63 +83,16 @@ export function getShortModelName(fullName: string): string {
 
 /**
  * Compute scores for a set of evaluations
+ * Uses centralized scoring utilities from @/core/scoring
  */
 export function computeModelScores(
   evaluations: EvaluationResult[],
   customBaselines?: TestSetHumanBaselines,
 ): ModelScore {
   const model = evaluations[0]?.model || 'unknown'
-  const total = evaluations.length
-  const successes = evaluations.filter((e) => e.outcome === 'success')
 
-  // Path efficiency for successes
-  const pathEfficiencies = successes.map((e) => e.efficiency).filter((e): e is number => e !== null)
-  const avgPathEfficiency =
-    pathEfficiencies.length > 0
-      ? pathEfficiencies.reduce((a, b) => a + b, 0) / pathEfficiencies.length
-      : 0
-
-  // Time efficiency and LMIQ score per task
-  let totalTimeEfficiency = 0
-  let totalTimeEfficiencyElite = 0
-  let totalLmiq = 0
-  let totalLmiqElite = 0
-  let totalHumanTimeMs = 0
-  let totalHumanTimeMsElite = 0
-
-  for (const e of evaluations) {
-    const humanBaseline = getEffectiveBaseline(e.difficulty, customBaselines, false)
-    const eliteBaseline = getEffectiveBaseline(e.difficulty, customBaselines, true)
-    const humanTimeMs = humanBaseline.timeSeconds * 1000
-    const eliteTimeMs = eliteBaseline.timeSeconds * 1000
-    totalHumanTimeMs += humanTimeMs
-    totalHumanTimeMsElite += eliteTimeMs
-
-    if (e.outcome === 'success') {
-      const timeEff = Math.min(humanTimeMs / e.inferenceTimeMs, 1.0)
-      const timeEffElite = Math.min(eliteTimeMs / e.inferenceTimeMs, 1.0)
-      totalTimeEfficiency += timeEff
-      totalTimeEfficiencyElite += timeEffElite
-
-      const pathEff = e.efficiency !== null ? e.efficiency : 0
-      totalLmiq += timeEff * pathEff
-      totalLmiqElite += timeEffElite * pathEff
-    }
-    // Failed tasks contribute 0 to time efficiency and LMIQ
-  }
-
-  // Inference time and cost
-  const totalInferenceTimeMs = evaluations.reduce((a, e) => a + e.inferenceTimeMs, 0)
-  const totalCost = evaluations.reduce((a, e) => a + (e.costUsd ?? 0), 0)
-
-  // Energy efficiency: (human energy) / (LLM energy)
-  // Human energy = human_time_seconds * HUMAN_BRAIN_WATTS
-  // LLM energy = inference_time_seconds * LLM_GPU_WATTS
-  const humanEnergyJoules = (totalHumanTimeMs / 1000) * HUMAN_BRAIN_WATTS
-  const humanEnergyJoulesElite = (totalHumanTimeMsElite / 1000) * HUMAN_BRAIN_WATTS
-  const llmEnergyJoules = (totalInferenceTimeMs / 1000) * LLM_GPU_WATTS
-  const energyEfficiency = llmEnergyJoules > 0 ? humanEnergyJoules / llmEnergyJoules : 0
-  const energyEfficiencyElite = llmEnergyJoules > 0 ? humanEnergyJoulesElite / llmEnergyJoules : 0
+  // Use centralized scoring
+  const scores = computeCoreScores(evaluations, customBaselines)
 
   // Outcome distribution
   const outcomes: Record<string, number> = {}
@@ -155,18 +103,18 @@ export function computeModelScores(
   return {
     model,
     shortModel: getShortModelName(model),
-    totalEvals: total,
-    successes: successes.length,
-    accuracy: total > 0 ? successes.length / total : 0,
-    avgPathEfficiency,
-    avgTimeEfficiency: total > 0 ? totalTimeEfficiency / total : 0,
-    avgTimeEfficiencyElite: total > 0 ? totalTimeEfficiencyElite / total : 0,
-    avgLmiq: total > 0 ? totalLmiq / total : 0,
-    avgLmiqElite: total > 0 ? totalLmiqElite / total : 0,
-    avgInferenceTimeMs: total > 0 ? totalInferenceTimeMs / total : 0,
-    totalCost,
-    energyEfficiency,
-    energyEfficiencyElite,
+    totalEvals: scores.total,
+    successes: scores.successes,
+    accuracy: scores.accuracy,
+    avgPathEfficiency: scores.avgPathEfficiency,
+    avgTimeEfficiency: scores.avgTimeEfficiency,
+    avgTimeEfficiencyElite: scores.avgTimeEfficiencyElite,
+    avgLmiq: scores.avgLmiq,
+    avgLmiqElite: scores.avgLmiqElite,
+    avgInferenceTimeMs: scores.total > 0 ? scores.totalInferenceTimeMs / scores.total : 0,
+    totalCost: scores.totalCost,
+    energyEfficiency: scores.energyEfficiency,
+    energyEfficiencyElite: scores.energyEfficiencyElite,
     outcomes,
   }
 }
@@ -254,6 +202,7 @@ export const FORMAT_COLORS: Record<PromptFormat, string> = {
   adjacency: '#fbbf24', // amber-400
   edges: '#f87171', // red-400
   edges_ascii: '#fb923c', // orange-400
+  ascii_block: '#38bdf8', // sky-400
   coordmatrix: '#a78bfa', // violet-400
   matrix2d: '#22d3ee', // cyan-400
   coordtoken: '#c084fc', // purple-400
@@ -264,6 +213,7 @@ export const FORMAT_COLORS: Record<PromptFormat, string> = {
  */
 export const FORMAT_ORDER: PromptFormat[] = [
   'edges_ascii',
+  'ascii_block',
   'edges',
   'adjacency',
   'coordtoken',
@@ -292,6 +242,7 @@ export function getModelSortIndex(shortModel: string): number {
 
 /**
  * Compute scores for a model+format combination
+ * Uses centralized scoring utilities from @/core/scoring
  */
 export function computeModelFormatScores(
   evaluations: EvaluationResult[],
@@ -300,65 +251,27 @@ export function computeModelFormatScores(
   customBaselines?: TestSetHumanBaselines,
 ): ModelFormatScore {
   const model = evaluations[0]?.model || 'unknown'
-  const total = evaluations.length
-  const successes = evaluations.filter((e) => e.outcome === 'success')
 
-  // Path efficiency for successes
-  const pathEfficiencies = successes.map((e) => e.efficiency).filter((e): e is number => e !== null)
-  const avgPathEfficiency =
-    pathEfficiencies.length > 0
-      ? pathEfficiencies.reduce((a, b) => a + b, 0) / pathEfficiencies.length
-      : 0
+  // Use centralized scoring
+  const scores = computeCoreScores(evaluations, customBaselines)
 
-  // Time efficiency and LMIQ score per task
-  let totalTimeEfficiency = 0
-  let totalLmiq = 0
-  let totalHumanTimeMs = 0
-
-  for (const e of evaluations) {
-    const baseline = getEffectiveBaseline(e.difficulty, customBaselines, elite)
-    const humanTimeMs = baseline.timeSeconds * 1000
-    totalHumanTimeMs += humanTimeMs
-
-    if (e.outcome === 'success') {
-      const timeEff = Math.min(humanTimeMs / e.inferenceTimeMs, 1.0)
-      totalTimeEfficiency += timeEff
-
-      const pathEff = e.efficiency !== null ? e.efficiency : 0
-      totalLmiq += timeEff * pathEff
-    }
-  }
-
-  // Inference time and cost
-  const totalInferenceTimeMs = evaluations.reduce((a, e) => a + e.inferenceTimeMs, 0)
-  const totalCost = evaluations.reduce((a, e) => a + (e.costUsd ?? 0), 0)
-
-  // Energy efficiency
-  const humanEnergyJoules = (totalHumanTimeMs / 1000) * HUMAN_BRAIN_WATTS
-  const llmEnergyJoules = (totalInferenceTimeMs / 1000) * LLM_GPU_WATTS
-  const energyEfficiency = llmEnergyJoules > 0 ? humanEnergyJoules / llmEnergyJoules : 0
-
-  // Calculate accuracy
-  const accuracy = total > 0 ? successes.length / total : 0
-
-  // Time efficiency averaged only over successful attempts
-  const avgTimeEfficiency = successes.length > 0 ? totalTimeEfficiency / successes.length : 0
-
-  // LMIQ = time_eff * path_eff * accuracy
-  const avgLmiq = successes.length > 0 ? (totalLmiq / successes.length) * accuracy : 0
+  // Select avg or elite based on parameter
+  const avgTimeEfficiency = elite ? scores.avgTimeEfficiencyElite : scores.avgTimeEfficiency
+  const avgLmiq = elite ? scores.avgLmiqElite : scores.avgLmiq
+  const energyEfficiency = elite ? scores.energyEfficiencyElite : scores.energyEfficiency
 
   return {
     model,
     shortModel: getShortModelName(model),
     format,
-    totalEvals: total,
-    successes: successes.length,
-    accuracy,
-    avgPathEfficiency,
+    totalEvals: scores.total,
+    successes: scores.successes,
+    accuracy: scores.accuracy,
+    avgPathEfficiency: scores.avgPathEfficiency,
     avgTimeEfficiency,
     avgLmiq,
-    avgInferenceTimeMs: total > 0 ? totalInferenceTimeMs / total : 0,
-    totalCost,
+    avgInferenceTimeMs: scores.total > 0 ? scores.totalInferenceTimeMs / scores.total : 0,
+    totalCost: scores.totalCost,
     energyEfficiency,
   }
 }
@@ -370,12 +283,17 @@ export function computeModelFormatScores(
 function getEffectiveFormat(promptFormats: PromptFormat[]): PromptFormat | null {
   if (!promptFormats || promptFormats.length === 0) return null
 
-  // Check for combined edges + ascii format (either order)
+  // Check for combined formats (either order)
   if (promptFormats.length === 2) {
     const hasEdges = promptFormats.includes('edges')
     const hasAscii = promptFormats.includes('ascii')
+    const hasBlock = promptFormats.includes('block')
+
     if (hasEdges && hasAscii) {
       return 'edges_ascii'
+    }
+    if (hasAscii && hasBlock) {
+      return 'ascii_block'
     }
   }
 

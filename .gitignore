@@ -5,6 +5,9 @@ node_modules/
 dist/
 *.tsbuildinfo
 
+# SQLite database
+db/
+
 # Generated data
 test-sets/
 results/

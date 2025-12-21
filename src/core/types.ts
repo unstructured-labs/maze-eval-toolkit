@@ -114,6 +114,7 @@ export type PromptFormat =
   | 'adjacency'
   | 'edges'
   | 'edges_ascii'
+  | 'ascii_block'
   | 'coordmatrix'
   | 'matrix2d'
   | 'coordtoken'
@@ -127,6 +128,7 @@ export const PROMPT_FORMATS: PromptFormat[] = [
   'adjacency',
   'edges',
   'edges_ascii',
+  'ascii_block',
   'coordmatrix',
   'matrix2d',
   'coordtoken',

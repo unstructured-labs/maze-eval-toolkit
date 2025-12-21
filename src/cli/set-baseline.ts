@@ -66,7 +66,7 @@ async function promptForBaselines(): Promise<{
   eliteAccuracy?: number
 }> {
   const avgTimeStr = await input({
-    message: 'Average human solve time (seconds):',
+    message: 'Average human solve time per problem (seconds):',
     default: '30',
     validate: (v) => {
       const result = validateNumber(v, 'Time', 0.1)
@@ -95,7 +95,7 @@ async function promptForBaselines(): Promise<{
   }
 
   const eliteTimeStr = await input({
-    message: 'Elite human solve time (seconds):',
+    message: 'Elite human solve time per problem (seconds):',
     default: String(Math.round(avgTime * 0.5)),
     validate: (v) => {
       const result = validateNumber(v, 'Time', 0.1)
@@ -223,9 +223,17 @@ async function runSetBaseline(options: SetBaselineOptions): Promise<void> {
 export const setBaselineCommand = new Command('set-baseline')
   .description('Set custom human baselines for a test set')
   .option('-t, --test-set <path>', 'Path to test set JSON file')
-  .option('--avg-time <seconds>', 'Average human solve time in seconds', Number.parseFloat)
+  .option(
+    '--avg-time <seconds>',
+    'Average human solve time per problem in seconds',
+    Number.parseFloat,
+  )
   .option('--avg-accuracy <value>', 'Average human accuracy (0-1)', Number.parseFloat)
-  .option('--elite-time <seconds>', 'Elite human solve time in seconds', Number.parseFloat)
+  .option(
+    '--elite-time <seconds>',
+    'Elite human solve time per problem in seconds',
+    Number.parseFloat,
+  )
   .option('--elite-accuracy <value>', 'Elite human accuracy (0-1)', Number.parseFloat)
   .option('--show', 'Show current baselines without modifying')
   .option('--clear', 'Remove custom baselines (use defaults)')

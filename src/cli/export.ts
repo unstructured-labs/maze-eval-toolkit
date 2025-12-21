@@ -4,7 +4,7 @@
 
 import { existsSync, readdirSync, writeFileSync } from 'node:fs'
 import { ExitPromptError } from '@inquirer/core'
-import { input, select } from '@inquirer/prompts'
+import { confirm, select } from '@inquirer/prompts'
 import chalk from 'chalk'
 import { Command } from 'commander'
 import type { Difficulty, EvaluationOutcome, PromptFormat } from '../core/types'
@@ -66,10 +66,12 @@ function condenseData(raw: VisualizerEvaluation[]): CondensedRecord[] {
   const grouped = new Map<string, VisualizerEvaluation[]>()
 
   for (const r of raw) {
-    const format =
-      r.promptFormats.includes('edges') && r.promptFormats.includes('ascii')
-        ? 'edges_ascii'
-        : r.promptFormats[0]
+    let format = r.promptFormats[0]
+    if (r.promptFormats.includes('edges') && r.promptFormats.includes('ascii')) {
+      format = 'edges_ascii'
+    } else if (r.promptFormats.includes('ascii') && r.promptFormats.includes('block')) {
+      format = 'ascii_block'
+    }
     const key = `${r.model}|${format}`
     if (!grouped.has(key)) grouped.set(key, [])
     grouped.get(key)!.push(r)
@@ -181,6 +183,17 @@ function getAllEvaluations(dbPath: string, testSetId?: string): VisualizerEvalua
   }))
 }
 
+/**
+ * Sanitize test set name for use in filename
+ */
+function sanitizeFilename(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9-_]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+}
+
 async function run() {
   console.log(chalk.bold('\nLMIQ Results Export'))
   console.log(chalk.dim('─'.repeat(50)))
@@ -194,11 +207,18 @@ async function run() {
     process.exit(1)
   }
 
-  const databasePath = await select({
-    message: 'Select evaluation database:',
-    choices: databases.map((d) => ({ name: d, value: d })),
-    pageSize: databases.length,
-  })
+  // Auto-select if only one database, otherwise prompt
+  let databasePath: string
+  if (databases.length === 1) {
+    databasePath = databases[0]!
+    console.log(chalk.dim(`Using database: ${databasePath}`))
+  } else {
+    databasePath = await select({
+      message: 'Select evaluation database:',
+      choices: databases.map((d) => ({ name: d, value: d })),
+      pageSize: databases.length,
+    })
+  }
 
   // Find available test sets
   const testSets = getTestSets(databasePath)
@@ -207,52 +227,64 @@ async function run() {
     process.exit(1)
   }
 
-  const testSetChoices = [
-    { name: 'All test sets', value: '__all__' },
-    ...testSets.map((t) => ({
-      name: t.name !== t.id ? `${t.name} (${t.id})` : t.id,
-      value: t.id,
-    })),
-  ]
+  // Build list of files to be created
+  const outputDir = './results'
+  const exports: { testSet: TestSetInfo; filename: string; miniFilename: string }[] = []
 
-  const selectedTestSet = await select({
-    message: 'Select test set to export:',
-    choices: testSetChoices,
-    pageSize: testSetChoices.length,
+  for (const testSet of testSets) {
+    const safeName = sanitizeFilename(testSet.name)
+    const filename = `${outputDir}/results-${safeName}.json`
+    const miniFilename = `${outputDir}/results-${safeName}-mini.json`
+    exports.push({ testSet, filename, miniFilename })
+  }
+
+  // Show confirmation with all files
+  console.log()
+  console.log(chalk.bold('Files to be created:'))
+  console.log()
+  for (const exp of exports) {
+    const evalCount = getAllEvaluations(databasePath, exp.testSet.id).length
+    console.log(`  ${chalk.cyan(exp.filename)}`)
+    console.log(`  ${chalk.cyan(exp.miniFilename)}`)
+    console.log(chalk.dim(`    └─ ${exp.testSet.name} (${evalCount} evaluations)`))
+    console.log()
+  }
+
+  const shouldExport = await confirm({
+    message: `Export ${exports.length} test set(s) to ${exports.length * 2} files?`,
+    default: true,
   })
 
-  const testSetId = selectedTestSet === '__all__' ? undefined : selectedTestSet
+  if (!shouldExport) {
+    console.log(chalk.yellow('\nCancelled'))
+    return
+  }
 
-  // Output path
-  const defaultFileName = testSetId ? `results-${testSetId}.json` : 'results.json'
-  const outputPath = await input({
-    message: 'Output JSON path:',
-    default: `./results/${defaultFileName}`,
-  })
-
-  // Load and export
+  // Export each test set
   console.log()
   console.log('Exporting results...')
+  console.log()
 
-  const results = getAllEvaluations(databasePath, testSetId)
-  writeFileSync(outputPath, JSON.stringify(results, null, 2), 'utf-8')
+  let totalRecords = 0
 
-  // Generate condensed mini version
-  const condensed = condenseData(results)
-  const miniOutputPath = outputPath.replace(/\.json$/, '-mini.json')
-  writeFileSync(miniOutputPath, JSON.stringify(condensed, null, 2), 'utf-8')
+  for (const exp of exports) {
+    const results = getAllEvaluations(databasePath, exp.testSet.id)
+    writeFileSync(exp.filename, JSON.stringify(results, null, 2), 'utf-8')
+
+    const condensed = condenseData(results)
+    writeFileSync(exp.miniFilename, JSON.stringify(condensed, null, 2), 'utf-8')
+
+    console.log(`  ${chalk.green('✓')} ${exp.testSet.name}: ${results.length} records`)
+    totalRecords += results.length
+  }
 
   console.log()
   console.log(chalk.dim('─'.repeat(50)))
   console.log(chalk.bold('Export Complete'))
   console.log()
-  console.log(chalk.dim('Full results:'))
-  console.log(`  Records: ${results.length}`)
-  console.log(`  Output: ${chalk.cyan(outputPath)}`)
-  console.log()
-  console.log(chalk.dim('Condensed results:'))
-  console.log(`  Records: ${condensed.length}`)
-  console.log(`  Output: ${chalk.cyan(miniOutputPath)}`)
+  console.log(`  Test sets: ${exports.length}`)
+  console.log(`  Total records: ${totalRecords}`)
+  console.log(`  Files created: ${exports.length * 2}`)
   console.log()
 }
 

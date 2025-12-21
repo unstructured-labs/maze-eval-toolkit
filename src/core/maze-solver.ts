@@ -188,12 +188,15 @@ export function validateSolution(
     // Check if we've reached the goal
     if (currentPos.x === goal.x && currentPos.y === goal.y) {
       const pathLength = i + 1
+      // Cap efficiency at 1.0 (can exceed 1.0 for mazes with special instructions
+      // where the solution path may be shorter than the calculated shortestPath)
+      const rawEfficiency = shortestPath / pathLength
       return {
         isValid: true,
         reachesGoal: true,
         moves: moves.slice(0, i + 1),
         pathLength,
-        efficiency: shortestPath / pathLength,
+        efficiency: Math.min(rawEfficiency, 1.0),
         finalPosition: currentPos,
       }
     }

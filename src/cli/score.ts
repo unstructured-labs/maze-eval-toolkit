@@ -7,7 +7,13 @@ import { ExitPromptError } from '@inquirer/core'
 import { checkbox, select } from '@inquirer/prompts'
 import chalk from 'chalk'
 import { Command } from 'commander'
-import { DIFFICULTIES, HUMAN_BRAIN_WATTS, LLM_GPU_WATTS, getEffectiveBaseline } from '../core'
+import {
+  DIFFICULTIES,
+  HUMAN_BRAIN_WATTS,
+  computeScores as computeCoreScores,
+  computeScoresByDifficulty,
+  getEffectiveBaseline,
+} from '../core'
 import type {
   Difficulty,
   EvaluationResult,
@@ -167,169 +173,36 @@ function getRunsForModel(evaluations: EvaluationResult[], model: string): RunInf
 
 /**
  * Compute scores for a set of evaluations
+ * Uses centralized scoring utilities from @/core/scoring
  */
 function computeScores(
   evaluations: EvaluationResult[],
   customBaselines?: TestSetHumanBaselines,
 ): OverallScores {
+  // Use centralized scoring for overall and per-difficulty scores
+  const coreScores = computeCoreScores(evaluations, customBaselines)
+  const difficultyScores = computeScoresByDifficulty(evaluations, customBaselines)
+
+  // Convert to DifficultyScores format
   const byDifficulty: Record<Difficulty, DifficultyScores> = {} as any
-
-  // Initialize per-difficulty scores
   for (const difficulty of DIFFICULTIES) {
-    const diffEvals = evaluations.filter((e) => e.difficulty === difficulty)
-    if (diffEvals.length === 0) {
-      byDifficulty[difficulty] = {
-        total: 0,
-        successes: 0,
-        accuracy: 0,
-        avgPathEfficiency: 0,
-        avgTimeEfficiency: 0,
-        avgTimeEfficiencyElite: 0,
-        avgLmiq: 0,
-        avgLmiqElite: 0,
-        avgInferenceTimeMs: 0,
-        totalCost: 0,
-      }
-      continue
-    }
-
-    const successes = diffEvals.filter((e) => e.outcome === 'success')
-    const humanBaseline = getEffectiveBaseline(difficulty, customBaselines, false)
-    const eliteBaseline = getEffectiveBaseline(difficulty, customBaselines, true)
-    const humanTimeMs = humanBaseline.timeSeconds * 1000
-    const eliteTimeMs = eliteBaseline.timeSeconds * 1000
-
-    // Path efficiency for successes
-    const pathEfficiencies = successes
-      .map((e) => e.efficiency)
-      .filter((e): e is number => e !== null)
-    const avgPathEfficiency =
-      pathEfficiencies.length > 0
-        ? pathEfficiencies.reduce((a, b) => a + b, 0) / pathEfficiencies.length
-        : 0
-
-    // Time efficiency per task (capped at 1.0, 0 if failed) - vs avg human
-    const timeEfficiencies = diffEvals.map((e) => {
-      if (e.outcome !== 'success') return 0
-      return Math.min(humanTimeMs / e.inferenceTimeMs, 1.0)
-    })
-    const avgTimeEfficiency = timeEfficiencies.reduce((a, b) => a + b, 0) / timeEfficiencies.length
-
-    // Time efficiency per task - vs elite human
-    const timeEfficienciesElite = diffEvals.map((e) => {
-      if (e.outcome !== 'success') return 0
-      return Math.min(eliteTimeMs / e.inferenceTimeMs, 1.0)
-    })
-    const avgTimeEfficiencyElite =
-      timeEfficienciesElite.reduce((a, b) => a + b, 0) / timeEfficienciesElite.length
-
-    // LMIQ score per task: time_efficiency × path_efficiency (0 if failed) - vs avg human
-    const lmiqScores = diffEvals.map((e) => {
-      if (e.outcome !== 'success') return 0
-      const timeEff = Math.min(humanTimeMs / e.inferenceTimeMs, 1.0)
-      const pathEff = e.efficiency !== null ? e.efficiency : 0
-      return timeEff * pathEff
-    })
-    const avgLmiq = lmiqScores.reduce((a, b) => a + b, 0) / lmiqScores.length
-
-    // LMIQ score - vs elite human
-    const lmiqScoresElite = diffEvals.map((e) => {
-      if (e.outcome !== 'success') return 0
-      const timeEff = Math.min(eliteTimeMs / e.inferenceTimeMs, 1.0)
-      const pathEff = e.efficiency !== null ? e.efficiency : 0
-      return timeEff * pathEff
-    })
-    const avgLmiqElite = lmiqScoresElite.reduce((a, b) => a + b, 0) / lmiqScoresElite.length
-
-    // Inference time and cost
-    const totalInferenceTimeMs = diffEvals.reduce((a, e) => a + e.inferenceTimeMs, 0)
-    const totalCost = diffEvals.reduce((a, e) => a + (e.costUsd ?? 0), 0)
-
+    const ds = difficultyScores[difficulty]
     byDifficulty[difficulty] = {
-      total: diffEvals.length,
-      successes: successes.length,
-      accuracy: successes.length / diffEvals.length,
-      avgPathEfficiency,
-      avgTimeEfficiency,
-      avgTimeEfficiencyElite,
-      avgLmiq,
-      avgLmiqElite,
-      avgInferenceTimeMs: totalInferenceTimeMs / diffEvals.length,
-      totalCost,
+      total: ds.total,
+      successes: ds.successes,
+      accuracy: ds.accuracy,
+      avgPathEfficiency: ds.avgPathEfficiency,
+      avgTimeEfficiency: ds.avgTimeEfficiency,
+      avgTimeEfficiencyElite: ds.avgTimeEfficiencyElite,
+      avgLmiq: ds.avgLmiq,
+      avgLmiqElite: ds.avgLmiqElite,
+      avgInferenceTimeMs: ds.total > 0 ? ds.totalInferenceTimeMs / ds.total : 0,
+      totalCost: ds.totalCost,
     }
   }
-
-  // Overall scores
-  const total = evaluations.length
-  const successes = evaluations.filter((e) => e.outcome === 'success')
-  const accuracy = total > 0 ? successes.length / total : 0
 
   // Adjusted accuracy = accuracy × avg path efficiency for successes
-  const allPathEfficiencies = successes
-    .map((e) => e.efficiency)
-    .filter((e): e is number => e !== null)
-  const avgSuccessPathEfficiency =
-    allPathEfficiencies.length > 0
-      ? allPathEfficiencies.reduce((a, b) => a + b, 0) / allPathEfficiencies.length
-      : 0
-  const adjustedAccuracy = accuracy * avgSuccessPathEfficiency
-
-  // Overall time efficiency (0 if failed, capped at 1.0 if success)
-  let totalTimeEfficiency = 0
-  let totalTimeEfficiencyElite = 0
-  let timeEfficiencyCount = 0
-  for (const e of evaluations) {
-    if (e.outcome === 'success') {
-      const humanBaseline = getEffectiveBaseline(e.difficulty, customBaselines, false)
-      const eliteBaseline = getEffectiveBaseline(e.difficulty, customBaselines, true)
-      const humanTimeMs = humanBaseline.timeSeconds * 1000
-      const eliteTimeMs = eliteBaseline.timeSeconds * 1000
-      totalTimeEfficiency += Math.min(humanTimeMs / e.inferenceTimeMs, 1.0)
-      totalTimeEfficiencyElite += Math.min(eliteTimeMs / e.inferenceTimeMs, 1.0)
-    }
-    // Failed tasks contribute 0 to time efficiency
-    timeEfficiencyCount++
-  }
-  const avgTimeEfficiency = timeEfficiencyCount > 0 ? totalTimeEfficiency / timeEfficiencyCount : 0
-  const avgTimeEfficiencyElite =
-    timeEfficiencyCount > 0 ? totalTimeEfficiencyElite / timeEfficiencyCount : 0
-
-  // Overall LMIQ score
-  let totalLmiq = 0
-  let totalLmiqElite = 0
-  for (const e of evaluations) {
-    const humanBaseline = getEffectiveBaseline(e.difficulty, customBaselines, false)
-    const eliteBaseline = getEffectiveBaseline(e.difficulty, customBaselines, true)
-    const humanTimeMs = humanBaseline.timeSeconds * 1000
-    const eliteTimeMs = eliteBaseline.timeSeconds * 1000
-    const timeEff = Math.min(humanTimeMs / e.inferenceTimeMs, 1.0)
-    const timeEffElite = Math.min(eliteTimeMs / e.inferenceTimeMs, 1.0)
-    const pathEff = e.outcome === 'success' && e.efficiency !== null ? e.efficiency : 0
-    totalLmiq += timeEff * pathEff
-    totalLmiqElite += timeEffElite * pathEff
-  }
-  const avgLmiq = total > 0 ? totalLmiq / total : 0
-  const avgLmiqElite = total > 0 ? totalLmiqElite / total : 0
-
-  // Energy efficiency
-  // Human: sum of (human_time_seconds × 20 watts) per difficulty
-  // LLM: sum of (inference_time_seconds × 350 watts)
-  let humanJoules = 0
-  let eliteHumanJoules = 0
-  let llmJoules = 0
-  for (const e of evaluations) {
-    const humanBaseline = getEffectiveBaseline(e.difficulty, customBaselines, false)
-    const eliteBaseline = getEffectiveBaseline(e.difficulty, customBaselines, true)
-    humanJoules += humanBaseline.timeSeconds * HUMAN_BRAIN_WATTS
-    eliteHumanJoules += eliteBaseline.timeSeconds * HUMAN_BRAIN_WATTS
-    llmJoules += (e.inferenceTimeMs / 1000) * LLM_GPU_WATTS
-  }
-  const energyEfficiency = llmJoules > 0 ? humanJoules / llmJoules : 0
-  const energyEfficiencyElite = llmJoules > 0 ? eliteHumanJoules / llmJoules : 0
-
-  // Total inference time and cost
-  const totalInferenceTimeMs = evaluations.reduce((a, e) => a + e.inferenceTimeMs, 0)
-  const totalCost = evaluations.reduce((a, e) => a + (e.costUsd ?? 0), 0)
+  const adjustedAccuracy = coreScores.accuracy * coreScores.avgPathEfficiency
 
   // Collect unique prompt formats used
   const allFormats = new Set<string>()
@@ -343,18 +216,18 @@ function computeScores(
   const promptFormats = [...allFormats]
 
   return {
-    total,
-    successes: successes.length,
-    accuracy,
+    total: coreScores.total,
+    successes: coreScores.successes,
+    accuracy: coreScores.accuracy,
     adjustedAccuracy,
-    avgTimeEfficiency,
-    avgTimeEfficiencyElite,
-    avgLmiq,
-    avgLmiqElite,
-    energyEfficiency,
-    energyEfficiencyElite,
-    totalInferenceTimeMs,
-    totalCost,
+    avgTimeEfficiency: coreScores.avgTimeEfficiency,
+    avgTimeEfficiencyElite: coreScores.avgTimeEfficiencyElite,
+    avgLmiq: coreScores.avgLmiq,
+    avgLmiqElite: coreScores.avgLmiqElite,
+    energyEfficiency: coreScores.energyEfficiency,
+    energyEfficiencyElite: coreScores.energyEfficiencyElite,
+    totalInferenceTimeMs: coreScores.totalInferenceTimeMs,
+    totalCost: coreScores.totalCost,
     promptFormats,
     byDifficulty,
   }
@@ -771,18 +644,10 @@ async function runScoring(options: ScoreOptions): Promise<void> {
     return
   }
 
-  // Load custom baselines from test set (if evaluations have a consistent testSetId)
-  let customBaselines: TestSetHumanBaselines | undefined
-  const testSetIds = [...new Set(evaluations.map((e) => e.testSetId))]
-  if (testSetIds.length === 1 && testSetIds[0]) {
-    customBaselines = loadTestSetBaselines(testSetIds[0])
-    if (customBaselines) {
-      console.log(chalk.cyan('Using custom human baselines for this test set'))
-    }
-  }
-
   // If no models specified, show summary for all models
   if (!models || models.length === 0) {
+    // Load custom baselines (if evaluations have a consistent testSetId)
+    const customBaselines = loadBaselinesIfConsistent(evaluations)
     printAllModelsSummary(evaluations, customBaselines)
     return
   }
@@ -799,6 +664,9 @@ async function runScoring(options: ScoreOptions): Promise<void> {
     console.log(chalk.red('No evaluations found matching criteria'))
     return
   }
+
+  // Load custom baselines AFTER all filtering (if filtered evaluations have a consistent testSetId)
+  const customBaselines = loadBaselinesIfConsistent(evaluations)
 
   // If multiple models selected, use summary view
   if (models.length > 1) {
@@ -820,6 +688,23 @@ async function runScoring(options: ScoreOptions): Promise<void> {
     const scores = computeScores(evaluations, customBaselines)
     printScoreCard(model, scores, customBaselines)
   }
+}
+
+/**
+ * Load custom baselines if all evaluations have the same test set ID
+ */
+function loadBaselinesIfConsistent(
+  evaluations: EvaluationResult[],
+): TestSetHumanBaselines | undefined {
+  const testSetIds = [...new Set(evaluations.map((e) => e.testSetId))]
+  if (testSetIds.length === 1 && testSetIds[0]) {
+    const baselines = loadTestSetBaselines(testSetIds[0])
+    if (baselines) {
+      console.log(chalk.cyan('Using custom human baselines for this test set'))
+    }
+    return baselines
+  }
+  return undefined
 }
 
 export const scoreCommand = new Command('score')

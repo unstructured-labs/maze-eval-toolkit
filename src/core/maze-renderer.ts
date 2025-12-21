@@ -417,6 +417,27 @@ export function renderEdgesAscii(maze: GeneratedMaze): string {
 }
 
 /**
+ * Render maze as combined ASCII + Block format
+ * Provides both line-based ASCII and block-based representations
+ */
+export function renderAsciiBlock(maze: GeneratedMaze): string {
+  const lines: string[] = []
+
+  // Add ASCII section
+  lines.push('--- ASCII REPRESENTATION ---')
+  lines.push('')
+  lines.push(renderASCII(maze))
+  lines.push('')
+
+  // Add Block section
+  lines.push('--- BLOCK REPRESENTATION ---')
+  lines.push('')
+  lines.push(renderBlock(maze))
+
+  return lines.join('\n')
+}
+
+/**
  * All available renderers
  */
 export const RENDERERS: Record<PromptFormat, MazeRenderer> = {
@@ -425,6 +446,7 @@ export const RENDERERS: Record<PromptFormat, MazeRenderer> = {
   adjacency: { name: 'adjacency', render: renderAdjacency },
   edges: { name: 'edges', render: renderEdges },
   edges_ascii: { name: 'edges_ascii', render: renderEdgesAscii },
+  ascii_block: { name: 'ascii_block', render: renderAsciiBlock },
   coordmatrix: { name: 'coordmatrix', render: renderCoordMatrix },
   matrix2d: { name: 'matrix2d', render: renderMatrix2D },
   coordtoken: { name: 'coordtoken', render: renderCoordinateToken },
@@ -496,6 +518,7 @@ export function generateAllPrompts(maze: GeneratedMaze): Record<PromptFormat, st
     adjacency: generatePrompt(maze, ['adjacency'], specialInstructions),
     edges: generatePrompt(maze, ['edges'], specialInstructions),
     edges_ascii: generatePrompt(maze, ['edges_ascii'], specialInstructions),
+    ascii_block: generatePrompt(maze, ['ascii_block'], specialInstructions),
     coordmatrix: generatePrompt(maze, ['coordmatrix'], specialInstructions),
     matrix2d: generatePrompt(maze, ['matrix2d'], specialInstructions),
     coordtoken: generatePrompt(maze, ['coordtoken'], specialInstructions),

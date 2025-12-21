@@ -4,6 +4,7 @@
 
 export * from './types'
 export * from './difficulty'
+export * from './scoring'
 export * from './maze-generator'
 export * from './maze-solver'
 export * from './maze-renderer'
