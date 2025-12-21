@@ -73,8 +73,7 @@ export default function App() {
       .then((d: { files: string[] }) => {
         // Filter to only JSON files, excluding human evals and mini test sets
         const jsonFiles = d.files.filter(
-          (f: string) =>
-            f.endsWith('.json') && !f.includes('human') && !f.includes('-mini'),
+          (f: string) => f.endsWith('.json') && !f.includes('human') && !f.includes('-mini'),
         )
         setResultsFiles(jsonFiles)
 
