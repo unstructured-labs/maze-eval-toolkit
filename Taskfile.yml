@@ -21,6 +21,11 @@ tasks:
     cmds:
       - bun --env-file=.env run src/cli/index.ts evaluate {{.CLI_ARGS}}
 
+  evaluate-manual:
+    desc: Evaluate manual solutions against a test set
+    cmds:
+      - bun run src/cli/index.ts evaluate-manual {{.CLI_ARGS}}
+
   score:
     desc: Compute LMIQ scores from evaluation results
     cmds:

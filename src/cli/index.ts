@@ -16,6 +16,7 @@
 import { program } from 'commander'
 import { deleteCommand } from './delete'
 import { evaluateCommand } from './evaluate'
+import { evaluateManualCommand } from './evaluate-manual'
 import { exportCommand } from './export'
 import { generateCommand } from './generate'
 import { importCommand } from './import'
@@ -30,6 +31,7 @@ program.name('lmiq').description('LMIQ v1 Beta - AI Maze Solving Benchmark').ver
 program.addCommand(generateCommand)
 program.addCommand(importCommand)
 program.addCommand(evaluateCommand)
+program.addCommand(evaluateManualCommand)
 program.addCommand(scoreCommand)
 program.addCommand(setBaselineCommand)
 program.addCommand(exportCommand)

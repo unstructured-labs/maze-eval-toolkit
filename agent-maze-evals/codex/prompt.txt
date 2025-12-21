@@ -1,0 +1,17 @@
+There is a mazes.json file in this folder with data about 2D grid mazes.
+
+The file contents 10 mazes of varying difficulties. Each maze includes a JSON representation and different prompts which each contain different textual representations of the maze structure.
+
+Your job is to produce valid move sequences for each maze, in a JSON output where the keys are the maze IDs and the values are the move sequence, e.g.
+```json
+{
+  "0b298bb3-e470-43c6-bb42-017f4a15ab26": [ "DOWN", "UP", "UP", "RIGHT" ]
+  ... etc.
+}
+```
+
+You can use any tools and write and run any code to solve these mazes, but you must only work in this folder.
+
+Note that the special instructions for each maze should be paid attention to closely.
+
+Once done, output the final solution data to a file: solution.json.
