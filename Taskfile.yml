@@ -57,9 +57,9 @@ tasks:
       - bun --env-file=.env run src/cli/index.ts retry {{.CLI_ARGS}}
 
   ui:
-    desc: Start the server and all UI apps (human eval on 5173, visualizer on 5174, mazes on 5175)
+    desc: Start the server and all UI apps (evals on 5173, results on 5174, mazes on 5175)
     cmds:
-      - bun run src/server/index.ts & bunx --bun vite --config src/ui/vite.config.ts & bunx --bun vite --config src/ui-visualizer/vite.config.ts & bunx --bun vite --config src/ui-mazes/vite.config.ts
+      - bun run src/server/index.ts & bunx --bun vite --config src/ui-evals/vite.config.ts & bunx --bun vite --config src/ui-results/vite.config.ts & bunx --bun vite --config src/ui-mazes/vite.config.ts
 
   format:
     desc: Format code with Biome

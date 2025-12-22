@@ -7,7 +7,7 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [react()],
   root: resolve(__dirname),
-  cacheDir: resolve(__dirname, '../../node_modules/.vite-ui-visualizer'),
+  cacheDir: resolve(__dirname, '../../node_modules/.vite-ui-evals'),
   resolve: {
     alias: {
       '@': resolve(__dirname, '..'),
@@ -19,7 +19,7 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5174,
+    port: 5173,
     proxy: {
       '/api': 'http://localhost:3017',
     },

@@ -20,7 +20,7 @@ export const uiCommand = new Command('ui')
     })
 
     // Start Vite
-    const vite = spawn('bunx', ['--bun', 'vite', '--config', 'src/ui/vite.config.ts'], {
+    const vite = spawn('bunx', ['--bun', 'vite', '--config', 'src/ui-evals/vite.config.ts'], {
       cwd: rootDir,
       stdio: 'inherit',
     })

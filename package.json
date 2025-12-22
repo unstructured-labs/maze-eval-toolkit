@@ -6,10 +6,10 @@
   "scripts": {
     "cli": "bun run src/cli/index.ts",
     "server": "bun run src/server/index.ts",
-    "vite": "bunx --bun vite --config src/ui/vite.config.ts",
+    "vite": "bunx --bun vite --config src/ui-evals/vite.config.ts",
     "ui": "bun run server & bun run vite",
-    "visualizer": "bunx --bun vite --config src/ui-visualizer/vite.config.ts",
-    "dev:visualizer": "bun run server & bun run visualizer",
+    "results": "bunx --bun vite --config src/ui-results/vite.config.ts",
+    "dev:results": "bun run server & bun run results",
     "mazes": "bunx --bun vite --config src/ui-mazes/vite.config.ts",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
