@@ -15,7 +15,8 @@
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "tsc": "tsc --noEmit",
-    "check": "bun run lint && bun run format && bun run tsc"
+    "check": "bun run lint && bun run format && bun run tsc",
+    "test": "bun test src/core/tests/"
   },
   "dependencies": {
     "@inquirer/prompts": "^8.1.0",

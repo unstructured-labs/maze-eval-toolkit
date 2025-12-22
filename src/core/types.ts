@@ -314,3 +314,129 @@ export interface SpineFirstConfig {
   /** Whether to fill remaining unvisited areas with DFS passages */
   fillRemaining?: boolean
 }
+
+// ============================================================================
+// EXPERIMENTAL UI FEATURES
+// These are optional features used by ui-mazes for experimental gameplay.
+// They are not part of the standard LMIQ benchmark but may be used for
+// custom maze designs and interactive testing.
+// ============================================================================
+
+/**
+ * A rectangular hole (void) area in the maze.
+ * Holes are impassable and cause failure if entered.
+ */
+export interface Hole {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+/**
+ * A portal on the maze boundary (entry/exit point)
+ */
+export interface Portal {
+  x: number
+  y: number
+  side: 'top' | 'bottom' | 'left' | 'right'
+}
+
+/**
+ * A pair of portals that teleport between each other
+ */
+export interface ExitDoorPair {
+  portal1: Portal
+  portal2: Portal
+}
+
+/**
+ * A wildcard tile that the player can pass through
+ */
+export type WildcardTile = Position | null
+
+/**
+ * Perspective rotation: the maze is displayed rotated, controls are remapped
+ */
+export type PerspectiveRotation = 'none' | '90-right' | '180' | '90-left'
+
+/**
+ * Execution mode for AI prompts
+ */
+export type ExecutionMode = 'fullSolution' | 'moveByMove'
+
+/**
+ * Context for move-by-move execution mode
+ */
+export interface MoveByMoveContext {
+  startPos: Position
+  currentPos: Position
+  moveHistory: MoveAction[]
+}
+
+/**
+ * Special actions that AI can return (beyond normal moves)
+ */
+export type SpecialAction = 'GOAL_UNREACHABLE' | 'UNDECIDED' | 'INSUFFICIENT_TIME'
+
+/**
+ * All valid special actions
+ */
+export const SPECIAL_ACTIONS: SpecialAction[] = [
+  'GOAL_UNREACHABLE',
+  'UNDECIDED',
+  'INSUFFICIENT_TIME',
+]
+
+/**
+ * Experimental options for maze rendering (holes, portals, wildcards)
+ */
+export interface ExperimentalRenderOptions {
+  holes?: Hole[]
+  exitDoorPair?: ExitDoorPair | null
+  wildcardTile?: WildcardTile
+}
+
+/**
+ * Experimental options for prompt generation
+ */
+export interface ExperimentalPromptOptions extends ExperimentalRenderOptions {
+  perspectiveRotation?: PerspectiveRotation
+  includeUnreachableInstructions?: boolean
+  applyTimePressure?: boolean
+  executionMode?: ExecutionMode
+  moveByMoveContext?: MoveByMoveContext | null
+}
+
+/**
+ * Check if a position is inside a hole
+ */
+export function isPositionInHole(pos: Position, holes: Hole[]): boolean {
+  for (const hole of holes) {
+    if (
+      pos.x >= hole.x &&
+      pos.x < hole.x + hole.width &&
+      pos.y >= hole.y &&
+      pos.y < hole.y + hole.height
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
+/**
+ * Get description of perspective rotation for AI prompts
+ */
+export function getPerspectiveRotationDescription(rotation: PerspectiveRotation): string {
+  switch (rotation) {
+    case '90-right':
+      return 'The maze has been rotated 90 degrees clockwise from the standard view. UP in the original maze is now RIGHT, RIGHT is now DOWN, DOWN is now LEFT, and LEFT is now UP. Your movement commands should be relative to the rotated view.'
+    case '90-left':
+      return 'The maze has been rotated 90 degrees counter-clockwise from the standard view. UP in the original maze is now LEFT, LEFT is now DOWN, DOWN is now RIGHT, and RIGHT is now UP. Your movement commands should be relative to the rotated view.'
+    case '180':
+      return 'The maze has been rotated 180 degrees from the standard view. UP is now DOWN, DOWN is now UP, LEFT is now RIGHT, and RIGHT is now LEFT. Your movement commands should be relative to the rotated view.'
+    default:
+      return ''
+  }
+}

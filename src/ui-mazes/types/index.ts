@@ -17,6 +17,20 @@ export {
   type RequirementType,
   posToKey,
   keyToPos,
+  // Experimental types now in core
+  type Hole,
+  type Portal,
+  type ExitDoorPair,
+  type WildcardTile,
+  type PerspectiveRotation,
+  type ExecutionMode,
+  type MoveByMoveContext,
+  type SpecialAction,
+  SPECIAL_ACTIONS,
+  type ExperimentalRenderOptions,
+  type ExperimentalPromptOptions,
+  isPositionInHole,
+  getPerspectiveRotationDescription,
 } from '@/core'
 
 import type { Cell } from '@/core'
@@ -32,11 +46,6 @@ export interface MutableCell extends Cell {
   visited: boolean
 }
 
-/**
- * Perspective rotation: the viewer sees the maze rotated, so controls are remapped
- */
-export type PerspectiveRotation = 'none' | '90-right' | '180' | '90-left'
-
 export type Room = { x: number; y: number; width: number; height: number }
 export type Obstacle = { x: number; y: number; width: number; height: number }
 export type Hallway = {
@@ -47,29 +56,6 @@ export type Hallway = {
   direction: 'horizontal' | 'vertical'
 }
 export type Box = { x: number; y: number; width: number; height: number }
-export type Hole = { x: number; y: number; width: number; height: number }
-
-/**
- * Portal represents an exit/entrance on the maze boundary
- */
-export type Portal = {
-  x: number
-  y: number
-  side: 'top' | 'bottom' | 'left' | 'right'
-}
-
-/**
- * Exit door pair: walking through one teleports to the other
- */
-export type ExitDoorPair = {
-  portal1: Portal
-  portal2: Portal
-}
-
-/**
- * Wildcard tile: a special movable tile that the player can pass through
- */
-export type WildcardTile = { x: number; y: number } | null
 
 /**
  * UI-specific difficulty settings (extends core with UI-only fields)
@@ -85,8 +71,9 @@ export type DifficultySettings = {
   skipFeatures?: boolean
 }
 
-export type ExecutionMode = 'fullSolution' | 'moveByMove'
-
+/**
+ * UI-specific prompt view options (maps to core ExperimentalPromptOptions)
+ */
 export interface PromptViewOptions {
   ascii: boolean
   adjacencyList: boolean
@@ -97,11 +84,5 @@ export interface PromptViewOptions {
   coordinateToken: boolean
   includeUnreachableInstructions: boolean
   applyTimePressure: boolean
-  executionMode: ExecutionMode
-}
-
-export interface MoveByMoveContext {
-  startPos: { x: number; y: number }
-  currentPos: { x: number; y: number }
-  moveHistory: Array<'UP' | 'DOWN' | 'LEFT' | 'RIGHT'>
+  executionMode: 'fullSolution' | 'moveByMove'
 }

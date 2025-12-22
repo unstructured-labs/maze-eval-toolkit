@@ -1,9 +1,15 @@
 /**
  * Maze features: holes, portals, wildcard tiles
+ *
+ * Note: isPositionInHole is now in core and re-exported from types.
  */
 
 import type { Cell, ExitDoorPair, Hole, Portal, Position } from '../types'
+import { isPositionInHole } from '../types'
 import { doBoxesOverlap } from './geometry'
+
+// Re-export isPositionInHole for backwards compatibility
+export { isPositionInHole }
 
 /**
  * Generate holes (punched-out sections) in the maze.
@@ -58,19 +64,6 @@ export const generateHolesInMaze = (
   }
 
   return holes
-}
-
-/**
- * Check if a position is inside any hole
- */
-export const isPositionInHole = (pos: Position, holes: Hole[]): boolean => {
-  return holes.some(
-    (hole) =>
-      pos.x >= hole.x &&
-      pos.x < hole.x + hole.width &&
-      pos.y >= hole.y &&
-      pos.y < hole.y + hole.height,
-  )
 }
 
 /**

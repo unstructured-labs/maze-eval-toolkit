@@ -2,8 +2,8 @@
  * Response parsing utilities for LLM outputs
  */
 
-import type { MoveAction } from '../core/types'
-import { VALID_MOVES } from '../core/types'
+import type { MoveAction, SpecialAction } from '../core/types'
+import { SPECIAL_ACTIONS, VALID_MOVES } from '../core/types'
 
 /**
  * Parsed response from LLM
@@ -12,6 +12,35 @@ export interface ParsedResponse {
   moves: MoveAction[] | null
   comments?: string
   error?: string
+  specialAction?: SpecialAction
+}
+
+/**
+ * Try to extract a special action from the response content.
+ * Returns the special action if found, null otherwise.
+ */
+function extractSpecialAction(content: string): SpecialAction | null {
+  for (const action of SPECIAL_ACTIONS) {
+    // Check for object format: { "action": "GOAL_UNREACHABLE" }
+    const objectPattern = new RegExp(`\\{\\s*"action"\\s*:\\s*"${action}"\\s*\\}`, 'i')
+    if (objectPattern.test(content)) {
+      return action
+    }
+
+    // Check for array with single item: [{ "action": "GOAL_UNREACHABLE" }]
+    const arrayPattern = new RegExp(`\\[\\s*\\{\\s*"action"\\s*:\\s*"${action}"\\s*\\}\\s*\\]`, 'i')
+    if (arrayPattern.test(content)) {
+      return action
+    }
+
+    // Check for plain text mention (e.g., "GOAL_UNREACHABLE" or just GOAL_UNREACHABLE)
+    const plainPattern = new RegExp(`\\b${action}\\b`, 'i')
+    if (plainPattern.test(content)) {
+      return action
+    }
+  }
+
+  return null
 }
 
 /**
@@ -97,12 +126,48 @@ function tryParseObjectFormat(content: string): ParsedResponse | null {
 }
 
 /**
+ * Parse a single move response (for move-by-move mode)
+ */
+export function parseSingleMoveResponse(content: string): ParsedResponse {
+  // Check for special actions first
+  const specialAction = extractSpecialAction(content)
+  if (specialAction) {
+    return { moves: null, specialAction }
+  }
+
+  // Look for single action format: { "action": "UP", "comments": "..." }
+  const singleActionMatch = content.match(/\{\s*"(?:comments|action)"[\s\S]*?\}/)
+  if (singleActionMatch?.[0]) {
+    try {
+      const parsed = JSON.parse(singleActionMatch[0])
+      if (parsed.action && typeof parsed.action === 'string') {
+        const action = parsed.action.toUpperCase() as MoveAction
+        if (VALID_MOVES.includes(action)) {
+          return { moves: [action], comments: parsed.comments }
+        }
+      }
+    } catch {
+      // Continue to fallback
+    }
+  }
+
+  // Fallback to regular parsing
+  return parseResponse(content)
+}
+
+/**
  * Extract moves from LLM response content using multiple strategies
  */
 export function parseResponse(content: string): ParsedResponse {
   const diagnostics: string[] = []
 
-  // Strategy 0: Try the object format first { comments: ..., actions: [...] }
+  // Strategy 0: Check for special actions first
+  const specialAction = extractSpecialAction(content)
+  if (specialAction) {
+    return { moves: null, specialAction }
+  }
+
+  // Strategy 1: Try the object format first { comments: ..., actions: [...] }
   const objectResult = tryParseObjectFormat(content)
   if (objectResult) return objectResult
 

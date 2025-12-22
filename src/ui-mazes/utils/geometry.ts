@@ -1,8 +1,15 @@
 /**
  * Geometry utilities for maze operations
+ *
+ * Note: getPerspectiveRotationDescription for AI prompts is now in core.
+ * The version here is for human-friendly UI display.
  */
 
 import type { Box, Hallway, PerspectiveRotation } from '../types'
+import { getPerspectiveRotationDescription as getCorePerspectiveRotationDescription } from '../types'
+
+// Re-export core version for AI prompts
+export { getCorePerspectiveRotationDescription }
 
 /**
  * Remap a direction based on perspective rotation.
