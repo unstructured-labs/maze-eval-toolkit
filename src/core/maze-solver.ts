@@ -14,6 +14,14 @@ import type {
 import { posToKey } from './types'
 
 /**
+ * Check if a position is blocked by an obstacle
+ */
+export function isPositionBlocked(pos: Position, obstacles?: Position[]): boolean {
+  if (!obstacles || obstacles.length === 0) return false
+  return obstacles.some((o) => o.x === pos.x && o.y === pos.y)
+}
+
+/**
  * Constraint configuration for validation
  */
 export interface MazeConstraints {
@@ -24,28 +32,46 @@ export interface MazeConstraints {
 }
 
 /**
- * Get valid neighbors from a position (respecting walls)
+ * Get valid neighbors from a position (respecting walls and obstacles)
  */
-function getNeighbors(grid: Cell[][], pos: Position, width: number, height: number): Position[] {
+function getNeighbors(
+  grid: Cell[][],
+  pos: Position,
+  width: number,
+  height: number,
+  obstacles?: Position[],
+): Position[] {
   const neighbors: Position[] = []
   const cell = grid[pos.y]?.[pos.x]
   if (!cell) return neighbors
 
   // Up
   if (!cell.walls.top && pos.y > 0) {
-    neighbors.push({ x: pos.x, y: pos.y - 1 })
+    const neighbor = { x: pos.x, y: pos.y - 1 }
+    if (!isPositionBlocked(neighbor, obstacles)) {
+      neighbors.push(neighbor)
+    }
   }
   // Down
   if (!cell.walls.bottom && pos.y < height - 1) {
-    neighbors.push({ x: pos.x, y: pos.y + 1 })
+    const neighbor = { x: pos.x, y: pos.y + 1 }
+    if (!isPositionBlocked(neighbor, obstacles)) {
+      neighbors.push(neighbor)
+    }
   }
   // Left
   if (!cell.walls.left && pos.x > 0) {
-    neighbors.push({ x: pos.x - 1, y: pos.y })
+    const neighbor = { x: pos.x - 1, y: pos.y }
+    if (!isPositionBlocked(neighbor, obstacles)) {
+      neighbors.push(neighbor)
+    }
   }
   // Right
   if (!cell.walls.right && pos.x < width - 1) {
-    neighbors.push({ x: pos.x + 1, y: pos.y })
+    const neighbor = { x: pos.x + 1, y: pos.y }
+    if (!isPositionBlocked(neighbor, obstacles)) {
+      neighbors.push(neighbor)
+    }
   }
 
   return neighbors
@@ -54,9 +80,18 @@ function getNeighbors(grid: Cell[][], pos: Position, width: number, height: numb
 /**
  * Find the shortest path between start and goal using BFS
  *
+ * @param grid - The maze grid
+ * @param start - Starting position
+ * @param goal - Goal position
+ * @param obstacles - Optional list of blocked positions (e.g., holes)
  * @returns MazeStats with shortest path length (-1 if unreachable)
  */
-export function solveMaze(grid: Cell[][], start: Position, goal: Position): MazeStats {
+export function solveMaze(
+  grid: Cell[][],
+  start: Position,
+  goal: Position,
+  obstacles?: Position[],
+): MazeStats {
   const height = grid.length
   const width = grid[0]?.length ?? 0
 
@@ -76,7 +111,7 @@ export function solveMaze(grid: Cell[][], start: Position, goal: Position): Maze
       break
     }
 
-    for (const neighbor of getNeighbors(grid, pos, width, height)) {
+    for (const neighbor of getNeighbors(grid, pos, width, height, obstacles)) {
       const key = posToKey(neighbor)
       if (!visited.has(key)) {
         visited.add(key)
@@ -88,7 +123,7 @@ export function solveMaze(grid: Cell[][], start: Position, goal: Position): Maze
   // Continue BFS to count all reachable cells
   while (queue.length > 0) {
     const current = queue.shift()!
-    for (const neighbor of getNeighbors(grid, current.pos, width, height)) {
+    for (const neighbor of getNeighbors(grid, current.pos, width, height, obstacles)) {
       const key = posToKey(neighbor)
       if (!visited.has(key)) {
         visited.add(key)
