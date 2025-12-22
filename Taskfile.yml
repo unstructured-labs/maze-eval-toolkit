@@ -56,6 +56,11 @@ tasks:
     cmds:
       - bun --env-file=.env run src/cli/index.ts retry {{.CLI_ARGS}}
 
+  rescore:
+    desc: Rescore evaluations using current test set constraints
+    cmds:
+      - bun run src/cli/index.ts rescore {{.CLI_ARGS}}
+
   ui:
     desc: Start the server and all UI apps (evals on 5173, results on 5174, mazes on 5175)
     cmds:

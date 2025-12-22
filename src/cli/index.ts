@@ -21,6 +21,7 @@ import { exportCommand } from './export'
 import { generateCommand } from './generate'
 import { importCommand } from './import'
 import { promptDemoCommand } from './prompt-demo'
+import { rescoreCommand } from './rescore'
 import { retryCommand } from './retry'
 import { scoreCommand } from './score'
 import { setBaselineCommand } from './set-baseline'
@@ -37,6 +38,7 @@ program.addCommand(setBaselineCommand)
 program.addCommand(exportCommand)
 program.addCommand(deleteCommand)
 program.addCommand(retryCommand)
+program.addCommand(rescoreCommand)
 program.addCommand(promptDemoCommand)
 program.addCommand(uiCommand)
 

@@ -18,6 +18,20 @@ import SolutionReplay from './components/SolutionReplay'
 
 type AppMode = 'viewer' | 'human-eval-setup' | 'human-eval'
 
+function formatNumber(value: number | null): string {
+  if (value === null) return '-'
+  return value.toLocaleString()
+}
+
+function formatTime(ms: number): string {
+  if (ms < 1000) return `${ms}ms`
+  const totalSeconds = Math.floor(ms / 1000)
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  if (minutes === 0) return `${seconds}s`
+  return `${minutes}m ${seconds}s`
+}
+
 // Flattened maze entry for quick run navigation
 interface QuickRunMazeEntry {
   difficulty: Difficulty
@@ -361,22 +375,103 @@ export default function App() {
               {/* Maze Viewer */}
               {currentMaze && (
                 <div className="bg-card rounded-lg p-4 border border-border">
-                  <div className="flex justify-between items-center mb-4">
-                    <div className="text-sm">
-                      <span className="text-muted-foreground">Maze ID: </span>
-                      <code className="text-xs bg-muted px-1.5 py-0.5 rounded text-cyan-400 font-mono">
-                        {currentMaze.id}
-                      </code>
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="text-sm space-y-2">
+                      <div>
+                        <span className="text-muted-foreground">Maze ID: </span>
+                        <code className="text-xs bg-muted px-1.5 py-0.5 rounded text-cyan-400 font-mono">
+                          {currentMaze.id}
+                        </code>
+                      </div>
+                      {selectedResult && (
+                        <div>
+                          <span
+                            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs ${
+                              selectedResult.outcome === 'success'
+                                ? 'border-green-400/50 text-green-400 bg-green-400/10'
+                                : 'border-red-400/50 text-red-400 bg-red-400/10'
+                            }`}
+                          >
+                            {selectedResult.outcome}
+                          </span>
+                        </div>
+                      )}
                     </div>
-                    <div className="text-sm">
-                      <span className="text-muted-foreground">Size: </span>
-                      <span>
-                        {currentMaze.width}x{currentMaze.height}
-                      </span>
-                      <span className="text-muted-foreground ml-4">Shortest Path: </span>
-                      <span className="text-primary">{currentMaze.shortestPath}</span>
-                    </div>
+                    {selectedResult ? (
+                      <div className="text-right text-xs text-muted-foreground space-y-1">
+                        <div className="flex flex-wrap justify-end gap-3">
+                          <span>In: {formatNumber(selectedResult.inputTokens)}</span>
+                          <span>Out: {formatNumber(selectedResult.outputTokens)}</span>
+                          <span>Reasoning: {formatNumber(selectedResult.reasoningTokens)}</span>
+                          <span>{formatTime(selectedResult.inferenceTimeMs)}</span>
+                          <span>
+                            {selectedResult.costUsd !== null
+                              ? `$${selectedResult.costUsd.toFixed(4)}`
+                              : '-'}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-end gap-3">
+                          <span>
+                            Shortest Path:{' '}
+                            <span className="text-primary">{currentMaze.shortestPath}</span>
+                          </span>
+                          <span>
+                            Moves:{' '}
+                            {selectedResult.solutionLength ??
+                              selectedResult.parsedMoves?.length ??
+                              '-'}
+                          </span>
+                          <span>
+                            Efficiency:{' '}
+                            {selectedResult.efficiency !== null
+                              ? `${(selectedResult.efficiency * 100).toFixed(0)}%`
+                              : '-'}
+                          </span>
+                          <Button
+                            onClick={
+                              isReplaying ? () => setIsReplaying(false) : () => setIsReplaying(true)
+                            }
+                            variant="outline"
+                            size="xs"
+                            className="text-primary"
+                          >
+                            {isReplaying ? 'Stop' : 'Replay'}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-sm text-muted-foreground">
+                        Shortest Path:{' '}
+                        <span className="text-primary">{currentMaze.shortestPath}</span>
+                      </div>
+                    )}
                   </div>
+                  {(currentMaze.specialInstructions ||
+                    currentMaze.requiredTiles?.length ||
+                    currentMaze.requiredSolutionSubsequences?.length) && (
+                    <div className="mb-4 space-y-2 text-xs text-muted-foreground">
+                      {currentMaze.specialInstructions && (
+                        <div className="bg-muted/60 border border-border rounded-md p-2">
+                          <div className="font-medium text-foreground">Special Instructions</div>
+                          <div className="mt-1 whitespace-pre-wrap">
+                            {currentMaze.specialInstructions}
+                          </div>
+                        </div>
+                      )}
+                      <div className="flex flex-wrap gap-2">
+                        {currentMaze.requiredTiles?.length ? (
+                          <span className="px-2 py-1 rounded-md bg-card border border-border">
+                            Required tiles: {currentMaze.requiredTiles.length}
+                          </span>
+                        ) : null}
+                        {currentMaze.requiredSolutionSubsequences?.length ? (
+                          <span className="px-2 py-1 rounded-md bg-card border border-border">
+                            Required subsequences: {currentMaze.requiredSolutionSubsequences.length}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  )}
                   <MazeViewer
                     maze={currentMaze}
                     solution={selectedResult}
@@ -403,14 +498,7 @@ export default function App() {
               )}
 
               {/* Solution Replay */}
-              {selectedResult && (
-                <SolutionReplay
-                  result={selectedResult}
-                  isReplaying={isReplaying}
-                  onStartReplay={() => setIsReplaying(true)}
-                  onStopReplay={() => setIsReplaying(false)}
-                />
-              )}
+              {selectedResult && <SolutionReplay result={selectedResult} />}
 
               {/* No results message */}
               {currentMaze && mazeResults.length === 0 && (
