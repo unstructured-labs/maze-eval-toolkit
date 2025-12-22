@@ -1,8 +1,15 @@
+import {
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Progress,
+} from '@/ui-library/components/ui'
 import { useCallback, useMemo, useState } from 'react'
 import type { MazeWithPrompts, TestSetFile } from '../../core/types'
 import { DIFFICULTIES } from '../../core/types'
 import InteractiveMaze, { type HumanMazeResult } from './InteractiveMaze'
-import { Button, Card, CardContent, CardHeader, CardTitle, Progress } from './ui'
 
 interface HumanEvalProps {
   runName: string

@@ -3,6 +3,7 @@
  */
 
 import { ELITE_HUMAN_BASELINE, HUMAN_BASELINE, getEffectiveBaseline } from '@/core/difficulty'
+import { getEffectivePromptFormat } from '@/core/prompt-format'
 import { computeScores as computeCoreScores } from '@/core/scoring'
 import type {
   Difficulty,
@@ -277,31 +278,6 @@ export function computeModelFormatScores(
 }
 
 /**
- * Determine the effective format from a promptFormats array
- * Handles combined formats like ["ascii", "edges"] -> "edges_ascii"
- */
-function getEffectiveFormat(promptFormats: PromptFormat[]): PromptFormat | null {
-  if (!promptFormats || promptFormats.length === 0) return null
-
-  // Check for combined formats (either order)
-  if (promptFormats.length === 2) {
-    const hasEdges = promptFormats.includes('edges')
-    const hasAscii = promptFormats.includes('ascii')
-    const hasBlock = promptFormats.includes('block')
-
-    if (hasEdges && hasAscii) {
-      return 'edges_ascii'
-    }
-    if (hasAscii && hasBlock) {
-      return 'ascii_block'
-    }
-  }
-
-  // Single format or unrecognized combo - use first
-  return promptFormats[0] ?? null
-}
-
-/**
  * Aggregate results by model and format
  */
 export function aggregateByModelAndFormat(
@@ -314,7 +290,7 @@ export function aggregateByModelAndFormat(
 
   for (const result of results) {
     // Get the effective format (handles combined formats)
-    const format = getEffectiveFormat(result.promptFormats)
+    const format = getEffectivePromptFormat(result.promptFormats)
     if (!format) continue
 
     if (!byModelFormat.has(result.model)) {

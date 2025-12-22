@@ -1,3 +1,11 @@
+import {
+  Button,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/ui-library/components/ui'
 import { useCallback, useEffect, useState } from 'react'
 import type { Difficulty, EvaluationResult, MazeWithPrompts, TestSetFile } from '../core/types'
 import { DIFFICULTIES } from '../core/types'
@@ -7,14 +15,6 @@ import MazeViewer from './components/MazeViewer'
 import ModelSummary from './components/ModelSummary'
 import Navigation from './components/Navigation'
 import SolutionReplay from './components/SolutionReplay'
-import {
-  Button,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from './components/ui'
 
 type AppMode = 'viewer' | 'human-eval-setup' | 'human-eval'
 

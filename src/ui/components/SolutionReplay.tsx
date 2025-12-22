@@ -1,5 +1,12 @@
+import {
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Separator,
+} from '@/ui-library/components/ui'
 import type { EvaluationResult } from '../../core/types'
-import { Button, Card, CardContent, CardHeader, CardTitle, Separator } from './ui'
 
 function formatNumber(n: number | null): string {
   if (n === null) return '-'

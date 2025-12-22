@@ -2,6 +2,8 @@
  * LLM service for maze solving using OpenRouter
  */
 
+import type { MoveAction, SpecialAction } from '@/core/types'
+import { parseResponse, parseSingleMoveResponse } from '@/llm/parser'
 import { formatDuration } from '../lib/format'
 import { extractOpenRouterCost } from '../lib/openrouter-types'
 import {
@@ -15,10 +17,8 @@ import {
 export type { LLMConfig, LLMResponseStats, LogCallback }
 export { LLMParseError }
 
-export type SpecialAction = 'GOAL_UNREACHABLE' | 'UNDECIDED' | 'INSUFFICIENT_TIME'
-
 export interface MazeSolutionResponse {
-  moves: Array<{ action: 'UP' | 'DOWN' | 'LEFT' | 'RIGHT' }>
+  moves: Array<{ action: MoveAction }>
   comments?: string
   specialAction?: SpecialAction
   reasoning?: string
@@ -27,174 +27,12 @@ export interface MazeSolutionResponse {
 }
 
 export interface SingleMoveResponse {
-  action: 'UP' | 'DOWN' | 'LEFT' | 'RIGHT'
+  action: MoveAction
   comments?: string
   specialAction?: SpecialAction
   reasoning?: string
   stats?: LLMResponseStats
   rawResponse?: string
-}
-
-type MoveAction = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT'
-const VALID_ACTIONS = ['UP', 'DOWN', 'LEFT', 'RIGHT'] as const
-const SPECIAL_ACTIONS: SpecialAction[] = ['GOAL_UNREACHABLE', 'UNDECIDED', 'INSUFFICIENT_TIME']
-
-/**
- * Try to extract a special action from the response content
- * Returns the special action if found, null otherwise
- */
-function extractSpecialAction(content: string): SpecialAction | null {
-  // Look for special action in JSON format: { "action": "GOAL_UNREACHABLE" } or [{ "action": "GOAL_UNREACHABLE" }]
-  for (const action of SPECIAL_ACTIONS) {
-    // Check for object format: { "action": "GOAL_UNREACHABLE" }
-    const objectPattern = new RegExp(`\\{\\s*"action"\\s*:\\s*"${action}"\\s*\\}`, 'i')
-    if (objectPattern.test(content)) {
-      return action
-    }
-
-    // Check for array with single item: [{ "action": "GOAL_UNREACHABLE" }]
-    const arrayPattern = new RegExp(`\\[\\s*\\{\\s*"action"\\s*:\\s*"${action}"\\s*\\}\\s*\\]`, 'i')
-    if (arrayPattern.test(content)) {
-      return action
-    }
-
-    // Check for plain text mention (e.g., "GOAL_UNREACHABLE" or just GOAL_UNREACHABLE)
-    const plainPattern = new RegExp(`\\b${action}\\b`, 'i')
-    if (plainPattern.test(content)) {
-      return action
-    }
-  }
-
-  return null
-}
-
-/**
- * Validate and normalize an array of moves
- * Returns normalized moves array or null if invalid
- */
-function validateMoves(parsed: unknown): Array<{ action: MoveAction }> | null {
-  if (!Array.isArray(parsed)) return null
-  if (parsed.length === 0) return null
-
-  const moves: Array<{ action: MoveAction }> = []
-  for (const move of parsed) {
-    if (!move?.action || typeof move.action !== 'string') return null
-    const action = move.action.toUpperCase()
-    if (!VALID_ACTIONS.includes(action as MoveAction)) return null
-    moves.push({ action: action as MoveAction })
-  }
-  return moves
-}
-
-/**
- * Try to parse moves from a JSON string
- */
-function tryParseJson(jsonStr: string): Array<{ action: MoveAction }> | null {
-  try {
-    const parsed = JSON.parse(jsonStr)
-    return validateMoves(parsed)
-  } catch {
-    return null
-  }
-}
-
-interface ExtractedResponse {
-  moves: Array<{ action: MoveAction }>
-  comments?: string
-}
-
-/**
- * Try to parse the new object format: { comments: string, actions: [...] }
- */
-function tryParseObjectFormat(content: string): ExtractedResponse | null {
-  // Look for JSON object in markdown code block
-  const codeBlockMatch = content.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/)
-  if (codeBlockMatch?.[1]) {
-    try {
-      const parsed = JSON.parse(codeBlockMatch[1])
-      if (parsed.actions && Array.isArray(parsed.actions)) {
-        const moves = validateMoves(parsed.actions)
-        if (moves) {
-          return { moves, comments: parsed.comments }
-        }
-      }
-    } catch {
-      // Continue to next strategy
-    }
-  }
-
-  // Look for JSON object with "actions" field
-  const objectMatch = content.match(/\{[\s\S]*"actions"\s*:\s*\[[\s\S]*?\][\s\S]*?\}/)
-  if (objectMatch) {
-    try {
-      const parsed = JSON.parse(objectMatch[0])
-      if (parsed.actions && Array.isArray(parsed.actions)) {
-        const moves = validateMoves(parsed.actions)
-        if (moves) {
-          return { moves, comments: parsed.comments }
-        }
-      }
-    } catch {
-      // Continue to next strategy
-    }
-  }
-
-  return null
-}
-
-/**
- * Extract moves array from LLM response content using multiple strategies
- */
-function extractMovesFromContent(content: string): ExtractedResponse | null {
-  // Strategy 0: Try the new object format first { comments: ..., actions: [...] }
-  const objectResult = tryParseObjectFormat(content)
-  if (objectResult) return objectResult
-
-  // Strategy 1: Look for JSON array in markdown code block (```json ... ```)
-  const codeBlockMatch = content.match(/```(?:json)?\s*(\[[\s\S]*?\])\s*```/)
-  if (codeBlockMatch?.[1]) {
-    const moves = tryParseJson(codeBlockMatch[1])
-    if (moves) return { moves }
-  }
-
-  // Strategy 2: Find the LAST JSON array in the response (most likely to be the answer)
-  const allArrayMatches = [...content.matchAll(/\[[\s\S]*?\]/g)]
-  if (allArrayMatches.length > 0) {
-    // Try from last to first
-    for (let i = allArrayMatches.length - 1; i >= 0; i--) {
-      const match = allArrayMatches[i]?.[0]
-      if (match) {
-        const moves = tryParseJson(match)
-        if (moves) return { moves }
-      }
-    }
-  }
-
-  // Strategy 3: Try greedy match for the first complete array (original behavior)
-  const greedyMatch = content.match(/\[[\s\S]*\]/)
-  if (greedyMatch) {
-    const moves = tryParseJson(greedyMatch[0])
-    if (moves) return { moves }
-  }
-
-  // Strategy 4: Look for comma-separated list of actions (e.g., "DOWN, RIGHT, UP, LEFT")
-  // This handles cases like "Moves: DOWN, RIGHT, RIGHT, UP, RIGHT..."
-  const commaSeparatedMatch = content.match(
-    /(?:moves?:?\s*)?((?:UP|DOWN|LEFT|RIGHT)(?:\s*,\s*(?:UP|DOWN|LEFT|RIGHT))+)/i,
-  )
-  if (commaSeparatedMatch?.[1]) {
-    const actions = commaSeparatedMatch[1].split(/\s*,\s*/)
-    const moves: Array<{ action: MoveAction }> = []
-    for (const action of actions) {
-      const normalized = action.trim().toUpperCase()
-      if (VALID_ACTIONS.includes(normalized as MoveAction)) {
-        moves.push({ action: normalized as MoveAction })
-      }
-    }
-    if (moves.length > 0) return { moves }
-  }
-
-  return null
 }
 
 /**
@@ -250,13 +88,12 @@ export async function getMazeSolution(
 
     logCallback?.('response', 'Parsing response...')
 
-    // First check for special actions (GOAL_UNREACHABLE, UNDECIDED)
-    const specialAction = extractSpecialAction(content)
-    if (specialAction) {
-      logCallback?.('success', `Detected special action: ${specialAction}`)
+    const parsed = parseResponse(content)
+    if (parsed.specialAction) {
+      logCallback?.('success', `Detected special action: ${parsed.specialAction}`)
       return {
         moves: [],
-        specialAction,
+        specialAction: parsed.specialAction,
         reasoning,
         rawResponse: content,
         stats: {
@@ -268,16 +105,19 @@ export async function getMazeSolution(
     }
 
     // Try to extract moves using multiple strategies
-    const extracted = extractMovesFromContent(content)
-    if (!extracted) {
-      throw new LLMParseError('Could not extract valid moves from response', content)
+    if (!parsed.moves) {
+      throw new LLMParseError(
+        parsed.error ?? 'Could not extract valid moves from response',
+        content,
+      )
     }
 
-    logCallback?.('success', `Parsed ${extracted.moves.length} moves from response`)
+    const moves = parsed.moves.map((action) => ({ action }))
+    logCallback?.('success', `Parsed ${moves.length} moves from response`)
 
     return {
-      moves: extracted.moves,
-      comments: extracted.comments,
+      moves,
+      comments: parsed.comments,
       reasoning,
       rawResponse: content,
       stats: {
@@ -313,42 +153,6 @@ export async function getMazeSolution(
     console.error('LLM API error:', error)
     throw new Error(errorMsg)
   }
-}
-
-/**
- * Extract a single move action from LLM response content
- */
-function extractSingleMoveFromContent(
-  content: string,
-): { action: MoveAction; comments?: string } | null {
-  // Strategy 1: Look for JSON object with single "action" field: {"action": "UP", "comments": "..."}
-  const objectMatch = content.match(/\{[\s\S]*"action"\s*:\s*"([A-Z]+)"[\s\S]*?\}/i)
-  if (objectMatch) {
-    try {
-      const parsed = JSON.parse(objectMatch[0])
-      const action = parsed.action?.toUpperCase()
-      if (VALID_ACTIONS.includes(action as MoveAction)) {
-        return { action: action as MoveAction, comments: parsed.comments }
-      }
-    } catch {
-      // Try simpler extraction
-      const action = objectMatch[1]?.toUpperCase()
-      if (VALID_ACTIONS.includes(action as MoveAction)) {
-        return { action: action as MoveAction }
-      }
-    }
-  }
-
-  // Strategy 2: Look for plain action word
-  const plainMatch = content.match(/\b(UP|DOWN|LEFT|RIGHT)\b/i)
-  if (plainMatch?.[1]) {
-    const action = plainMatch[1].toUpperCase()
-    if (VALID_ACTIONS.includes(action as MoveAction)) {
-      return { action: action as MoveAction }
-    }
-  }
-
-  return null
 }
 
 /**
@@ -404,13 +208,12 @@ export async function getSingleMove(
 
     logCallback?.('response', 'Parsing response...')
 
-    // First check for special actions
-    const specialAction = extractSpecialAction(content)
-    if (specialAction) {
-      logCallback?.('success', `Detected special action: ${specialAction}`)
+    const parsed = parseSingleMoveResponse(content)
+    if (parsed.specialAction) {
+      logCallback?.('success', `Detected special action: ${parsed.specialAction}`)
       return {
         action: 'UP', // Placeholder, won't be used
-        specialAction,
+        specialAction: parsed.specialAction,
         reasoning,
         rawResponse: content,
         stats: {
@@ -422,16 +225,16 @@ export async function getSingleMove(
     }
 
     // Try to extract single move
-    const extracted = extractSingleMoveFromContent(content)
-    if (!extracted) {
-      throw new LLMParseError('Could not extract valid move from response', content)
+    const action = parsed.moves?.[0]
+    if (!action) {
+      throw new LLMParseError(parsed.error ?? 'Could not extract valid move from response', content)
     }
 
-    logCallback?.('success', `Parsed move: ${extracted.action}`)
+    logCallback?.('success', `Parsed move: ${action}`)
 
     return {
-      action: extracted.action,
-      comments: extracted.comments,
+      action,
+      comments: parsed.comments,
       reasoning,
       rawResponse: content,
       stats: {

@@ -351,6 +351,26 @@ async function runEvaluation(options: EvaluateOptions) {
               `\n--- EMPTY RESPONSE DEBUG (maze: ${maze.id}, difficulty: ${difficulty}) ---\nFinish reason: ${response.finishReason}\nTokens: input=${response.stats.inputTokens}, output=${response.stats.outputTokens}, reasoning=${response.stats.reasoningTokens}\nRaw response: "${response.rawResponse}"\n--- END EMPTY RESPONSE DEBUG ---\n\n`,
             )
           }
+        } else if (response.specialAction) {
+          switch (response.specialAction) {
+            case 'GOAL_UNREACHABLE':
+              if (maze.shortestPath === -1) {
+                outcome = 'success'
+                successes++
+              } else {
+                outcome = 'failure'
+                failures++
+              }
+              break
+            case 'INSUFFICIENT_TIME':
+              outcome = 'timeout'
+              failures++
+              break
+            default:
+              outcome = 'failure'
+              failures++
+              break
+          }
         } else if (response.parseError || response.parsedMoves === null) {
           outcome = 'parse_error'
           parseErrors++

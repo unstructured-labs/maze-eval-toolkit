@@ -42,15 +42,8 @@ export interface OpenRouterUsage {
  * Returns 0 if cost is not available.
  */
 export function extractOpenRouterCost(usage: unknown): number {
-  if (
-    usage &&
-    typeof usage === 'object' &&
-    'cost' in usage &&
-    usage.cost !== undefined &&
-    usage.cost !== null
-  ) {
-    const cost = Number(usage.cost)
-    return Number.isNaN(cost) ? 0 : cost
-  }
-  return 0
+  const cost = extractSharedOpenRouterCost(usage)
+  if (cost === null) return 0
+  return Number.isNaN(cost) ? 0 : cost
 }
+import { extractOpenRouterCost as extractSharedOpenRouterCost } from '@/llm/openrouter-utils'

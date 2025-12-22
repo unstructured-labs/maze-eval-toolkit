@@ -1,5 +1,5 @@
+import { Badge, Card, CardContent, CardHeader, CardTitle } from '@/ui-library/components/ui'
 import type { EvaluationResult } from '../../core/types'
-import { Badge, Card, CardContent, CardHeader, CardTitle } from './ui'
 
 function formatTime(ms: number): string {
   if (ms < 1000) return `${ms}ms`

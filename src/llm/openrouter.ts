@@ -3,7 +3,8 @@
  */
 
 import OpenAI from 'openai'
-import type { MoveAction } from '../core/types'
+import type { MoveAction, SpecialAction } from '../core/types'
+import { extractOpenRouterCost, extractOpenRouterReasoningTokens } from './openrouter-utils'
 import { parseResponse } from './parser'
 
 /**
@@ -25,6 +26,7 @@ export interface EvaluationResponse {
   parsedMoves: MoveAction[] | null
   reasoning: string | null
   parseError?: string
+  specialAction?: SpecialAction
   finishReason: string | null // 'stop' = natural, 'length' = hit token limit
   stats: ResponseStats
 }
@@ -37,37 +39,6 @@ export function createClient(apiKey: string): OpenAI {
     apiKey,
     baseURL: 'https://openrouter.ai/api/v1',
   })
-}
-
-/**
- * Extract cost from OpenRouter usage response
- */
-function extractCost(usage: unknown): number | null {
-  if (!usage || typeof usage !== 'object') return null
-
-  // OpenRouter includes cost in usage.cost or usage.total_cost
-  const u = usage as Record<string, unknown>
-  if (typeof u.cost === 'number') return u.cost
-  if (typeof u.total_cost === 'number') return u.total_cost
-
-  return null
-}
-
-/**
- * Extract reasoning tokens from OpenRouter response
- */
-function extractReasoningTokens(usage: unknown): number | null {
-  if (!usage || typeof usage !== 'object') return null
-
-  const u = usage as Record<string, unknown>
-  // OpenRouter may include reasoning tokens in various fields
-  if (typeof u.reasoning_tokens === 'number') return u.reasoning_tokens
-  if (u.completion_tokens_details && typeof u.completion_tokens_details === 'object') {
-    const details = u.completion_tokens_details as Record<string, unknown>
-    if (typeof details.reasoning_tokens === 'number') return details.reasoning_tokens
-  }
-
-  return null
 }
 
 /**
@@ -139,8 +110,8 @@ export async function evaluateMaze(
   const stats: ResponseStats = {
     inputTokens: (usage?.prompt_tokens as number) ?? null,
     outputTokens: (usage?.completion_tokens as number) ?? null,
-    reasoningTokens: extractReasoningTokens(usage),
-    costUsd: extractCost(usage),
+    reasoningTokens: extractOpenRouterReasoningTokens(usage),
+    costUsd: extractOpenRouterCost(usage),
     inferenceTimeMs,
   }
 
@@ -149,6 +120,7 @@ export async function evaluateMaze(
     parsedMoves: parsed.moves,
     reasoning,
     parseError: parsed.error,
+    specialAction: parsed.specialAction,
     finishReason,
     stats,
   }

@@ -7,6 +7,7 @@ import { ExitPromptError } from '@inquirer/core'
 import { confirm, select } from '@inquirer/prompts'
 import chalk from 'chalk'
 import { Command } from 'commander'
+import { getEffectivePromptFormat } from '../core/prompt-format'
 import type { Difficulty, EvaluationOutcome, PromptFormat } from '../core/types'
 import { closeDatabase, initDatabase } from '../db/client'
 import { DB_DIR, findDatabases } from './utils'
@@ -67,12 +68,7 @@ function condenseData(raw: VisualizerEvaluation[]): CondensedRecord[] {
   const grouped = new Map<string, VisualizerEvaluation[]>()
 
   for (const r of raw) {
-    let format = r.promptFormats[0]
-    if (r.promptFormats.includes('edges') && r.promptFormats.includes('ascii')) {
-      format = 'edges_ascii'
-    } else if (r.promptFormats.includes('ascii') && r.promptFormats.includes('block')) {
-      format = 'ascii_block'
-    }
+    const format = getEffectivePromptFormat(r.promptFormats) ?? 'unknown'
     const key = `${r.model}|${format}`
     if (!grouped.has(key)) grouped.set(key, [])
     grouped.get(key)!.push(r)

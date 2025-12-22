@@ -2,6 +2,7 @@
  * Maze generation utilities
  */
 
+import { getUnvisitedNeighbors, removeWallBetween } from '@/core/maze-utils'
 import type { Cell, Hallway, MutableCell, Obstacle, Position, Room } from '../types'
 import { doBoxesOverlap, getHallwayBounds } from './geometry'
 
@@ -31,44 +32,6 @@ export const punchEntrance = (
       if (entrance.x < width - 1) grid[entrance.y][entrance.x + 1].walls.left = false
       break
   }
-}
-
-/** Remove wall between two adjacent cells */
-export const removeWallBetween = (current: Cell, next: Cell): void => {
-  const dx = next.x - current.x
-  const dy = next.y - current.y
-
-  if (dx === 1) {
-    current.walls.right = false
-    next.walls.left = false
-  } else if (dx === -1) {
-    current.walls.left = false
-    next.walls.right = false
-  } else if (dy === 1) {
-    current.walls.bottom = false
-    next.walls.top = false
-  } else if (dy === -1) {
-    current.walls.top = false
-    next.walls.bottom = false
-  }
-}
-
-/** Get unvisited neighbors for DFS maze generation */
-export const getUnvisitedNeighbors = (
-  grid: MutableCell[][],
-  cell: MutableCell,
-  width: number,
-  height: number,
-): MutableCell[] => {
-  const neighbors: MutableCell[] = []
-  const { x, y } = cell
-
-  if (y > 0 && !grid[y - 1][x].visited) neighbors.push(grid[y - 1][x])
-  if (x < width - 1 && !grid[y][x + 1].visited) neighbors.push(grid[y][x + 1])
-  if (y < height - 1 && !grid[y + 1][x].visited) neighbors.push(grid[y + 1][x])
-  if (x > 0 && !grid[y][x - 1].visited) neighbors.push(grid[y][x - 1])
-
-  return neighbors
 }
 
 /** Generate obstacles for a room */

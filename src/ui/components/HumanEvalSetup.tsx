@@ -1,5 +1,3 @@
-import { useCallback, useEffect, useState } from 'react'
-import type { TestSetFile } from '../../core/types'
 import {
   Button,
   Card,
@@ -14,7 +12,10 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from './ui'
+} from '@/ui-library/components/ui'
+import { useCallback, useEffect, useState } from 'react'
+import type { ChangeEvent } from 'react'
+import type { TestSetFile } from '../../core/types'
 
 interface HumanEvalSetupProps {
   onStart: (runName: string, testSet: TestSetFile) => void
@@ -80,7 +81,7 @@ export default function HumanEvalSetup({ onStart, onCancel }: HumanEvalSetupProp
               id="run-name"
               placeholder="e.g., Sean - First Attempt"
               value={runName}
-              onChange={(e) => setRunName(e.target.value)}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setRunName(e.target.value)}
             />
           </div>
 

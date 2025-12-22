@@ -1,5 +1,5 @@
-import { Button } from './ui'
-import { Input } from './ui'
+import { Button, Input } from '@/ui-library/components/ui'
+import type { ChangeEvent } from 'react'
 
 interface NavigationProps {
   current: number
@@ -25,7 +25,7 @@ export default function Navigation({ current, total, onNavigate }: NavigationPro
           value={current + 1}
           min={1}
           max={total}
-          onChange={(e) => {
+          onChange={(e: ChangeEvent<HTMLInputElement>) => {
             const val = Number.parseInt(e.target.value, 10)
             if (!Number.isNaN(val) && val >= 1 && val <= total) {
               onNavigate(val - 1)

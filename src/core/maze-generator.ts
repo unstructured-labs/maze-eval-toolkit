@@ -8,6 +8,7 @@
 import { v4 as uuidv4 } from 'uuid'
 import { getDifficultyConfig, getSpineFirstConfig, randomDimension } from './difficulty'
 import { solveMaze } from './maze-solver'
+import { getUnvisitedNeighbors, removeWallBetween } from './maze-utils'
 import { generateSpineFirstMaze } from './spine-first-generator'
 import type {
   Cell,
@@ -35,76 +36,6 @@ export interface GenerationOptions {
  */
 interface GenerationCell extends Cell {
   visited: boolean
-}
-
-/**
- * Get unvisited neighbors for DFS
- */
-function getUnvisitedNeighbors(
-  grid: GenerationCell[][],
-  cell: GenerationCell,
-  width: number,
-  height: number,
-): GenerationCell[] {
-  const neighbors: GenerationCell[] = []
-  const { x, y } = cell
-
-  // Top
-  if (y > 0) {
-    const neighbor = grid[y - 1]?.[x]
-    if (neighbor && !neighbor.visited) {
-      neighbors.push(neighbor)
-    }
-  }
-  // Right
-  if (x < width - 1) {
-    const neighbor = grid[y]?.[x + 1]
-    if (neighbor && !neighbor.visited) {
-      neighbors.push(neighbor)
-    }
-  }
-  // Bottom
-  if (y < height - 1) {
-    const neighbor = grid[y + 1]?.[x]
-    if (neighbor && !neighbor.visited) {
-      neighbors.push(neighbor)
-    }
-  }
-  // Left
-  if (x > 0) {
-    const neighbor = grid[y]?.[x - 1]
-    if (neighbor && !neighbor.visited) {
-      neighbors.push(neighbor)
-    }
-  }
-
-  return neighbors
-}
-
-/**
- * Remove the wall between two adjacent cells
- */
-function removeWallBetween(current: GenerationCell, next: GenerationCell): void {
-  const dx = next.x - current.x
-  const dy = next.y - current.y
-
-  if (dx === 1) {
-    // Next is to the right
-    current.walls.right = false
-    next.walls.left = false
-  } else if (dx === -1) {
-    // Next is to the left
-    current.walls.left = false
-    next.walls.right = false
-  } else if (dy === 1) {
-    // Next is below
-    current.walls.bottom = false
-    next.walls.top = false
-  } else if (dy === -1) {
-    // Next is above
-    current.walls.top = false
-    next.walls.bottom = false
-  }
 }
 
 /**

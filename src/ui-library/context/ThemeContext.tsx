@@ -1,5 +1,5 @@
 /**
- * Theme context for managing light/dark mode
+ * Theme context for managing light/dark mode.
  */
 
 import { createContext, useContext, useEffect, useState } from 'react'
@@ -16,30 +16,28 @@ const ThemeContext = createContext<ThemeContextValue | undefined>(undefined)
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
-    // Check localStorage first
     const saved = localStorage.getItem('theme') as Theme | null
     if (saved === 'light' || saved === 'dark') {
       return saved
     }
-    // Default to dark mode
     return 'dark'
   })
 
-  // Apply theme on mount and when it changes
   useEffect(() => {
     const root = document.documentElement
+    const body = document.body
     if (theme === 'dark') {
       root.classList.add('dark')
+      body.classList.add('dark')
     } else {
       root.classList.remove('dark')
+      body.classList.remove('dark')
     }
     localStorage.setItem('theme', theme)
   }, [theme])
 
-  // Global keyboard shortcut for 't' to toggle theme
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Only trigger if not typing in an input/textarea
       if (
         event.key.toLowerCase() === 't' &&
         !(event.target instanceof HTMLInputElement) &&
