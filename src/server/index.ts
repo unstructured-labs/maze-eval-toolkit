@@ -1,9 +1,9 @@
-import { readFile, readdir } from 'node:fs/promises'
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { v4 as uuidv4 } from 'uuid'
-import type { Difficulty, EvaluationResult, MoveAction } from '../core/types'
+import type { Difficulty, EvaluationResult, MoveAction, TestSetFile } from '../core/types'
 import { initDatabase, insertEvaluation } from '../db'
 
 const app = new Hono()
@@ -27,6 +27,14 @@ async function listJsonFiles(dir: string): Promise<string[]> {
   } catch {
     return []
   }
+}
+
+function sanitizeFilename(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9-_]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
 }
 
 // List test set files
@@ -90,6 +98,45 @@ app.get('/api/test-sets/:testSetId', async (c) => {
     return c.json({ error: 'Test set not found' }, 404)
   } catch {
     return c.json({ error: 'Failed to load test sets' }, 500)
+  }
+})
+
+interface TestSetExportRequest {
+  testSet: TestSetFile
+  filename?: string
+  overwrite?: boolean
+}
+
+app.post('/api/test-sets', async (c) => {
+  try {
+    const body = (await c.req.json()) as TestSetExportRequest
+    const { testSet, filename, overwrite } = body
+
+    if (!testSet || !testSet.id || !testSet.name) {
+      return c.json({ error: 'Invalid test set payload' }, 400)
+    }
+
+    const baseName = sanitizeFilename(filename ?? testSet.name ?? testSet.id)
+    if (!baseName) {
+      return c.json({ error: 'Invalid filename' }, 400)
+    }
+
+    const fileName = baseName.endsWith('.json') ? baseName : `${baseName}.json`
+    const filepath = join(DATA_DIR, fileName)
+
+    if (!overwrite) {
+      const existing = await listJsonFiles(DATA_DIR)
+      if (existing.includes(fileName)) {
+        return c.json({ error: 'File already exists' }, 409)
+      }
+    }
+
+    await mkdir(DATA_DIR, { recursive: true })
+    await writeFile(filepath, JSON.stringify(testSet, null, 2), 'utf-8')
+    return c.json({ success: true, filename: fileName })
+  } catch (err) {
+    console.error('Failed to save test set:', err)
+    return c.json({ error: 'Failed to save test set' }, 500)
   }
 })
 

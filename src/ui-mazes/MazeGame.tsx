@@ -909,7 +909,7 @@ export default function MazeGame() {
   }, [])
 
   // Export selected mazes as TestSetFile format for lmiq-v1-beta
-  const handleExportTestSet = useCallback(() => {
+  const handleExportTestSet = useCallback(async () => {
     const allMazes = getSavedMazesList()
     const selectedMazes = allMazes.filter((m) => selectedMazesForExport.has(m.name))
 
@@ -919,17 +919,27 @@ export default function MazeGame() {
     }
 
     const testSetFile = convertToTestSetFile(selectedMazes, testSetName)
-    const json = JSON.stringify(testSetFile, null, 2)
-    const blob = new Blob([json], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `${testSetName}.json`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
-    setExportTestSetDialogOpen(false)
+    try {
+      const response = await fetch('/api/test-sets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          testSet: testSetFile,
+          filename: testSetName,
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Failed to export test set' }))
+        throw new Error(error.error || 'Failed to export test set')
+      }
+
+      const data = (await response.json()) as { filename?: string }
+      alert(`Exported test set to test-sets/${data.filename ?? `${testSetName}.json`}`)
+      setExportTestSetDialogOpen(false)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to export test set')
+    }
   }, [selectedMazesForExport, testSetName])
 
   // Import maze(s) from JSON file
