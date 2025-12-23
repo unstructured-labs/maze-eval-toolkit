@@ -89,6 +89,7 @@ export default function MazeGame() {
   const [draggingWildcard, setDraggingWildcard] = useState(false)
   const [lost, setLost] = useState(false)
   const [aiWallCollision, setAiWallCollision] = useState(false)
+  const [firstInvalidMoveIndex, setFirstInvalidMoveIndex] = useState<number | null>(null)
   // Track AI visited cells and cells where invalid moves occurred
   const [aiVisitedCells, setAiVisitedCells] = useState<Set<string>>(new Set())
   const [aiInvalidMoveCells, setAiInvalidMoveCells] = useState<Set<string>>(new Set())
@@ -813,11 +814,22 @@ export default function MazeGame() {
         })
 
         // Set failure state (but don't stop the path playback)
-        if (moveIsInvalid && !aiWallCollision) {
+        // Track if this is the first invalid move
+        const isFirstInvalidMove = moveIsInvalid && !aiWallCollision
+        if (isFirstInvalidMove) {
           setAiWallCollision(true)
         }
         if (fellInHole && !lost) {
           setLost(true)
+        }
+
+        // Record the index of the first invalid move (1-based)
+        if (isFirstInvalidMove) {
+          setMoveHistory((prev) => {
+            const aiMoveCount = prev.filter((m) => m.source === 'ai').length
+            setFirstInvalidMoveIndex(aiMoveCount + 1)
+            return prev
+          })
         }
       }
 
@@ -841,8 +853,9 @@ export default function MazeGame() {
         return next
       })
 
-      // Return true to let the AI continue playing out its full path
-      return true
+      // Return whether the move was valid (for status tracking)
+      // The AI will continue executing its full path regardless
+      return !moveIsInvalid && !fellInHole
     },
     [canMove, won, lost, aiWallCollision, dimensions, exitDoorPair, playerPos, holes],
   )
@@ -855,6 +868,7 @@ export default function MazeGame() {
     setWon(false)
     setLost(false)
     setAiWallCollision(false)
+    setFirstInvalidMoveIndex(null)
     setAiVisitedCells(new Set())
     setAiInvalidMoveCells(new Set())
   }, [startPos])
@@ -2169,9 +2183,14 @@ export default function MazeGame() {
           </h1>
 
           {/* Game Status */}
-          {won && (
+          {won && !aiWallCollision && (
             <div className="text-[13px] font-semibold uppercase tracking-[0.2em] text-green-500 mb-2 animate-pulse">
               You won!
+            </div>
+          )}
+          {won && aiWallCollision && (
+            <div className="text-[13px] font-semibold uppercase tracking-[0.2em] text-red-500 mb-2 animate-pulse">
+              Goal reached with invalid moves
             </div>
           )}
           {lost && (
@@ -2407,7 +2426,9 @@ export default function MazeGame() {
           {(() => {
             const aiMoves = moveHistory.filter((m) => m.source === 'ai')
             const hasAiMoves = aiMoves.length > 0
-            const isAiCompletion = won && hasAiMoves && humanModeState !== 'completed'
+            // Only count as completion if goal reached AND no invalid moves were made
+            const isAiCompletion =
+              won && hasAiMoves && humanModeState !== 'completed' && !aiWallCollision
             const isAiHoleFailure = lost && hasAiMoves && humanModeState !== 'completed'
             const isAiWallFailure = aiWallCollision && hasAiMoves && humanModeState !== 'completed'
 
@@ -2542,7 +2563,7 @@ export default function MazeGame() {
                 <div className="mt-3 p-3 rounded-lg border bg-red-500/10 border-red-500/30">
                   <div className="text-sm font-semibold text-red-400 mb-2">AI Agent Failed</div>
                   <div className="text-xs text-muted-foreground">
-                    The AI ran into a wall after {aiMoves.length} moves.
+                    The AI ran into a wall on move {firstInvalidMoveIndex ?? aiMoves.length}.
                   </div>
                   {constraintFailed && (
                     <div className="text-xs text-yellow-400 mt-1">

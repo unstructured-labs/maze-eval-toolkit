@@ -127,10 +127,17 @@ export function AIControlPanel({
     }
   }, [history.length])
   const aiHasRun = history.length > 0 || specialActionResult !== null
+  const hasFailedMoves = history.some((item) => item.status === 'failed')
+  // Only count as completed if goal reached AND no invalid moves were made
   const aiCompleted =
-    (aiHasRun && !isRunning && isGameWon) || specialActionResult?.isCorrect === true
+    (aiHasRun && !isRunning && isGameWon && !hasFailedMoves) ||
+    specialActionResult?.isCorrect === true
   const aiStopped =
-    (aiHasRun && !isRunning && !isGameWon && !specialActionResult && isGameStarted) ||
+    (aiHasRun &&
+      !isRunning &&
+      (!isGameWon || hasFailedMoves) &&
+      !specialActionResult &&
+      isGameStarted) ||
     specialActionResult?.isCorrect === false
 
   const getLogColor = (level: string) => {

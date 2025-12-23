@@ -71,7 +71,7 @@ interface AIPanelProps {
   onSpecialInstructionsChange: (value: string) => void
 }
 
-const DEFAULT_MODEL = 'openai/gpt-4o-mini'
+const DEFAULT_MODEL = 'google/gemini-3-flash-preview'
 
 export function AIPanel({
   prompt,
@@ -294,15 +294,13 @@ export function AIPanel({
       ),
     )
 
-    if (!success) {
-      setIsRunning(false)
-      isRunningRef.current = false
-      setError(`Move ${index + 1} (${move.action}) failed - hit a wall or boundary`)
-      addLog('error', `Move ${index + 1} failed: ${move.action}`)
-      return
+    // Log the move result but continue execution regardless
+    if (success) {
+      addLog('success', `Move ${index + 1}/${moves.length}: ${move.action}`)
+    } else {
+      addLog('error', `Move ${index + 1}/${moves.length}: ${move.action} (invalid)`)
     }
 
-    addLog('success', `Move ${index + 1}/${moves.length}: ${move.action}`)
     moveIndexRef.current = index + 1
 
     // Schedule next move
