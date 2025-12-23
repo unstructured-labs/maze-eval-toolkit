@@ -1,7 +1,7 @@
 {
-  "name": "lmiq-v1-beta",
+  "name": "maze-eval-toolkit",
   "version": "0.1.0",
-  "description": "LMIQ v1 Beta - AI Maze Solving Benchmark",
+  "description": "LMIQ Maze Eval Toolkit - Various tools for building maze challenges and evaluating LLM spatial reasoning abilities.",
   "type": "module",
   "scripts": {
     "cli": "bun run src/cli/index.ts",

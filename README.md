@@ -1,6 +1,6 @@
-# LMIQ v1 Beta
+# LMIQ Maze Eval Toolkit
 
-AI Maze Solving Benchmark - Test LLM spatial reasoning by evaluating their ability to navigate mazes.
+AI Maze Eval Toolkit - Various tools for building maze challenges and evaluating LLM spatial reasoning abilities.
 
 ## Quick Start
 
